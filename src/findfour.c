@@ -63,6 +63,9 @@ enum {
 	IMG_COINBLUE,
 	IMG_COINRED,
 	
+	IMG_BIGCOINBLUE,
+	IMG_BIGCOINRED,
+	
 	NUM_IMAGES
 };
 
@@ -72,7 +75,10 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/ventana.png",
 	GAMEDATA_DIR "images/tablero.png",
 	GAMEDATA_DIR "images/coinblue.png",
-	GAMEDATA_DIR "images/coinred.png"
+	GAMEDATA_DIR "images/coinred.png",
+	
+	GAMEDATA_DIR "images/bigcoinblue.png",
+	GAMEDATA_DIR "images/bigcoinred.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -92,6 +98,9 @@ typedef struct _Juego {
 	int w, h;
 	
 	struct _Juego *prev, *next;
+	
+	int turno;
+	int resalte;
 } Juego;
 
 /* Prototipos de función */
@@ -154,6 +163,8 @@ int game_loop (void) {
 						ventana->next = primero;
 						ventana->w = images[IMG_WINDOW]->w;
 						ventana->h = images[IMG_WINDOW]->h;
+						ventana->turno = RANDOM(2);
+						ventana->resalte = -1;
 						start += 20;
 						ventana->x = ventana->y = start;
 						
@@ -168,6 +179,7 @@ int game_loop (void) {
 				case SDL_MOUSEBUTTONDOWN:
 					/* Primero, analizar si el evento cae dentro de alguna ventana */
 					
+					if (event.button.button != SDL_BUTTON_LEFT) break;
 					manejado = FALSE;
 					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
 						x = event.button.x;
@@ -220,6 +232,39 @@ int game_loop (void) {
 						/* Mover la ventana a las coordenadas del mouse - los offsets */
 						drag->x = event.motion.x - drag_x;
 						drag->y = event.motion.y - drag_y;
+					} else {
+						/* En caso contrario, buscar por un evento de ficha de turno */
+						manejado = FALSE;
+						for (ventana = primero; ventana != NULL; ventana = ventana->next) {
+							x = event.motion.x;
+							y = event.motion.y;
+							ventana->resalte = -1;
+							if (manejado == FALSE && x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+								manejado = TRUE;
+								x -= ventana->x;
+								y -= ventana->y;
+								
+								if (y > 65 && y < 217 && x > 26 && x < 208) {
+									/* Está dentro del tablero */
+									if (x >= 32 && x < 56) {
+										/* Primer fila de resalte */
+										ventana->resalte = 0;
+									} else if (x >= 56 && x < 81) {
+										ventana->resalte = 1;
+									} else if (x >= 81 && x < 105) {
+										ventana->resalte = 2;
+									} else if (x >= 105 && x < 129) {
+										ventana->resalte = 3;
+									} else if (x >= 129 && x < 153) {
+										ventana->resalte = 4;
+									} else if (x >= 153 && x < 178) {
+										ventana->resalte = 5;
+									} else if (x >= 178 && x < 206) {
+										ventana->resalte = 6;
+									}
+								}
+							}
+						}
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
@@ -242,6 +287,50 @@ int game_loop (void) {
 			rect.h = ventana->h;
 			
 			SDL_BlitSurface (images[IMG_WINDOW], NULL, screen, &rect);
+			
+			rect.x = ventana->x + 26;
+			rect.y = ventana->y + 65;
+			rect.w = images[IMG_BOARD]->w;
+			rect.h = images[IMG_BOARD]->h;
+			
+			SDL_BlitSurface (images[IMG_BOARD], NULL, screen, &rect);
+			
+			if (ventana->resalte >= 0) {
+				/* Dibujar la ficha resalta en la columna correspondiente */
+				rect.x = ventana->x;
+				rect.y = ventana->y + 46;
+				switch (ventana->resalte) {
+					case 0:
+						rect.x += 30;
+						break;
+					case 1:
+						rect.x += 53;
+						break;
+					case 2:
+						rect.x += 79;
+						break;
+					case 3:
+						rect.x += 102;
+						break;
+					case 4:
+						rect.x += 126;
+						break;
+					case 5:
+						rect.x += 150;
+						break;
+					case 6:
+						rect.x += 175;
+						break;
+				}
+				rect.w = images[IMG_BIGCOINRED]->w;
+				rect.h = images[IMG_BIGCOINRED]->h;
+				
+				if (ventana->turno % 2 == 0) {
+					SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
+				} else {
+					SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
+				}
+			}
 		}
 		
 		SDL_Flip (screen);
