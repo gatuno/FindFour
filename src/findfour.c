@@ -33,6 +33,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <string.h>
+
 #include <SDL.h>
 #include <SDL_image.h>
 
@@ -101,6 +103,8 @@ typedef struct _Juego {
 	
 	int turno;
 	int resalte;
+	
+	int tablero[6][7];
 } Juego;
 
 /* Prototipos de función */
@@ -114,6 +118,8 @@ SDL_Surface * images [NUM_IMAGES];
 
 Juego *primero, *ultimo;
 static int id = 1;
+const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
+const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 
 int main (int argc, char *argv[]) {
 	
@@ -134,7 +140,7 @@ int game_loop (void) {
 	Uint32 last_time, now_time;
 	SDL_Rect rect;
 	
-	int g;
+	int g, h;
 	int start = 0;
 	int x, y, drag_x, drag_y;
 	int manejado;
@@ -167,6 +173,9 @@ int game_loop (void) {
 						ventana->resalte = -1;
 						start += 20;
 						ventana->x = ventana->y = start;
+						
+						/* Vaciar el tablero */
+						memset (ventana->tablero, 0, sizeof (int[6][7]));
 						
 						if (primero == NULL) {
 							primero = ultimo = ventana;
@@ -246,20 +255,20 @@ int game_loop (void) {
 								
 								if (y > 65 && y < 217 && x > 26 && x < 208) {
 									/* Está dentro del tablero */
-									if (x >= 32 && x < 56) {
+									if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
 										/* Primer fila de resalte */
 										ventana->resalte = 0;
-									} else if (x >= 56 && x < 81) {
+									} else if (x >= 56 && x < 81 && ventana->tablero[0][1] == 0) {
 										ventana->resalte = 1;
-									} else if (x >= 81 && x < 105) {
+									} else if (x >= 81 && x < 105 && ventana->tablero[0][2] == 0) {
 										ventana->resalte = 2;
-									} else if (x >= 105 && x < 129) {
+									} else if (x >= 105 && x < 129 && ventana->tablero[0][3] == 0) {
 										ventana->resalte = 3;
-									} else if (x >= 129 && x < 153) {
+									} else if (x >= 129 && x < 153 && ventana->tablero[0][4] == 0) {
 										ventana->resalte = 4;
-									} else if (x >= 153 && x < 178) {
+									} else if (x >= 153 && x < 178 && ventana->tablero[0][5] == 0) {
 										ventana->resalte = 5;
-									} else if (x >= 178 && x < 206) {
+									} else if (x >= 178 && x < 206 && ventana->tablero[0][6] == 0) {
 										ventana->resalte = 6;
 									}
 								}
@@ -269,6 +278,51 @@ int game_loop (void) {
 					break;
 				case SDL_MOUSEBUTTONUP:
 					drag = NULL;
+					if (event.button.button != SDL_BUTTON_LEFT) break;
+					manejado = FALSE;
+					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
+						x = event.button.x;
+						y = event.button.y;
+						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+							x -= ventana->x;
+							y -= ventana->y;
+							
+							if ((y >= 16) || (x >= 64 && x < 168 && y < 22)) {
+								/* El evento cae dentro de la ventana */
+								manejado = TRUE;
+							}
+							if (y > 65 && y < 217 && x > 26 && x < 208) {
+								/* Está dentro del tablero */
+								h = -1;
+								if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
+									/* Primer fila de resalte */
+									h = 0;
+								} else if (x >= 56 && x < 81 && ventana->tablero[0][1] == 0) {
+									h = 1;
+								} else if (x >= 81 && x < 105 && ventana->tablero[0][2] == 0) {
+									h = 2;
+								} else if (x >= 105 && x < 129 && ventana->tablero[0][3] == 0) {
+									h = 3;
+								} else if (x >= 129 && x < 153 && ventana->tablero[0][4] == 0) {
+									h = 4;
+								} else if (x >= 153 && x < 178 && ventana->tablero[0][5] == 0) {
+									h = 5;
+								} else if (x >= 178 && x < 206 && ventana->tablero[0][6] == 0) {
+									h = 6;
+								}
+								
+								if (h >= 0) {
+									g = 5;
+									while (g > 0 && ventana->tablero[g][h] != 0) g--;
+									
+									/* Poner la ficha en la posición [g][h] y avanzar turno */
+									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
+									ventana->turno++;
+									if (g == 0) ventana->resalte = -1;
+								}
+							}
+						}
+					}
 					break;
 				case SDL_QUIT:
 					/* Vamos a cerrar la aplicación */
@@ -287,6 +341,24 @@ int game_loop (void) {
 			rect.h = ventana->h;
 			
 			SDL_BlitSurface (images[IMG_WINDOW], NULL, screen, &rect);
+			
+			/* dibujar las fichas antes del tablero */
+			for (g = 0; g < 6; g++) {
+				for (h = 0; h < 7; h++) {
+					if (ventana->tablero[g][h] == 0) continue;
+					rect.x = ventana->x + tablero_cols[h];
+					rect.y = ventana->y + tablero_filas[g];
+					
+					rect.w = images[IMG_COINBLUE]->w;
+					rect.h = images[IMG_COINBLUE]->h;
+					
+					if (ventana->tablero[g][h] == 1) {
+						SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+					} else {
+						SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+					}
+				}
+			}
 			
 			rect.x = ventana->x + 26;
 			rect.y = ventana->y + 65;
