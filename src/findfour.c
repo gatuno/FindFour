@@ -38,14 +38,23 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
+/* Para el manejo de red */
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+
+/* Para el tipo de dato uint8_t */
+#include <stdint.h>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
+#include "findfour.h"
+
 #define FPS (1000/24)
 
 #define SWAP(a, b, t) ((t) = (a), (a) = (b), (b) = (t))
-#define RANDOM(x) ((int) (x ## .0 * rand () / (RAND_MAX + 1.0)))
 
 #ifndef FALSE
 #define FALSE 0
@@ -92,21 +101,6 @@ enum {
 	GAME_QUIT
 };
 
-/* Estructuras */
-typedef struct _Juego {
-	int id;
-	
-	int x, y;
-	int w, h;
-	
-	struct _Juego *prev, *next;
-	
-	int turno;
-	int resalte;
-	
-	int tablero[6][7];
-} Juego;
-
 /* Prototipos de función */
 int game_loop (void);
 void setup (void);
@@ -145,6 +139,9 @@ int game_loop (void) {
 	int x, y, drag_x, drag_y;
 	int manejado;
 	
+	/* Para la red */
+	int fd_sock;
+	
 	primero = NULL;
 	ultimo = NULL;
 	Juego *ventana, *drag;
@@ -153,38 +150,22 @@ int game_loop (void) {
 	
 	drag = NULL;
 	
+	fd_sock = findfour_netinit ();
+	
+	if (fd_sock < 0) {
+		/* Mostrar ventana de error */
+		
+		return GAME_QUIT;
+	}
+	
 	do {
 		last_time = SDL_GetTicks ();
 		
+		/* Antes de procesar los eventos locales, procesar la red */
+		process_netevent (fd_sock);
+		
 		while (SDL_PollEvent(&event) > 0) {
 			switch (event.type) {
-				case SDL_KEYDOWN:
-					if (event.key.keysym.sym == SDLK_n) {
-						/* Crear una nueva ventana */
-						ventana = (Juego *) malloc (sizeof (Juego));
-						
-						ventana->id = id++;
-						
-						ventana->prev = NULL;
-						ventana->next = primero;
-						ventana->w = images[IMG_WINDOW]->w;
-						ventana->h = images[IMG_WINDOW]->h;
-						ventana->turno = RANDOM(2);
-						ventana->resalte = -1;
-						start += 20;
-						ventana->x = ventana->y = start;
-						
-						/* Vaciar el tablero */
-						memset (ventana->tablero, 0, sizeof (int[6][7]));
-						
-						if (primero == NULL) {
-							primero = ultimo = ventana;
-						} else {
-							primero->prev = ventana;
-							primero = ventana;
-						}
-					}
-					break;
 				case SDL_MOUSEBUTTONDOWN:
 					/* Primero, analizar si el evento cae dentro de alguna ventana */
 					
@@ -244,16 +225,17 @@ int game_loop (void) {
 					} else {
 						/* En caso contrario, buscar por un evento de ficha de turno */
 						manejado = FALSE;
-						for (ventana = primero; ventana != NULL; ventana = ventana->next) {
+						for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
 							x = event.motion.x;
 							y = event.motion.y;
 							ventana->resalte = -1;
-							if (manejado == FALSE && x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+							if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 								manejado = TRUE;
 								x -= ventana->x;
 								y -= ventana->y;
 								
-								if (y > 65 && y < 217 && x > 26 && x < 208) {
+								/* Si es nuestro turno, hacer resalte */
+								if (y > 65 && y < 217 && x > 26 && x < 208 && (ventana->turno % 2) == ventana->inicio) {
 									/* Está dentro del tablero */
 									if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
 										/* Primer fila de resalte */
@@ -274,6 +256,13 @@ int game_loop (void) {
 								}
 							}
 						}
+						
+						/* Recorrer las ventanas restantes y quitarles el resaltado */
+						while (ventana != NULL) {
+							ventana->resalte = -1;
+							
+							ventana = ventana->next;
+						}
 					}
 					break;
 				case SDL_MOUSEBUTTONUP:
@@ -291,7 +280,7 @@ int game_loop (void) {
 								/* El evento cae dentro de la ventana */
 								manejado = TRUE;
 							}
-							if (y > 65 && y < 217 && x > 26 && x < 208) {
+							if (y > 65 && y < 217 && x > 26 && x < 208 && (ventana->turno % 2) == ventana->inicio) {
 								/* Está dentro del tablero */
 								h = -1;
 								if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
@@ -318,7 +307,8 @@ int game_loop (void) {
 									/* Poner la ficha en la posición [g][h] y avanzar turno */
 									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
 									ventana->turno++;
-									if (g == 0) ventana->resalte = -1;
+									/* Enviar el turno */
+									ventana->resalte = -1;
 								}
 							}
 						}
@@ -397,7 +387,7 @@ int game_loop (void) {
 				rect.w = images[IMG_BIGCOINRED]->w;
 				rect.h = images[IMG_BIGCOINRED]->h;
 				
-				if (ventana->turno % 2 == 0) {
+				if (ventana->turno % 2 == ventana->inicio) {
 					SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
 				} else {
 					SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
