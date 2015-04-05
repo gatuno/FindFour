@@ -80,11 +80,17 @@ typedef struct _FF_NET {
 
 /* Los posibles estados en los que se encuentra la partida */
 enum {
-	/* Estado inicial, cuando llega una conexión entrante con SYN activado
+	/* Acabamos de enviar un SYN para conexión inicial, esperamos el SYN + ACK
+	 */
+	NET_WAIT_SYN_ACK = 0,
+	/* Estado inicial para una conexión entrante, cuando llega una conexión entrante con SYN activado
 	 * Después de recibir el paquete, estamos obligados a enviar un SYN + ACK
 	 * En este estado estamos esperando recibir el ACK = 0
 	 */
-	NET_WAIT_ACK_0 = 0,
+	NET_WAIT_ACK_0,
+	
+	/* A la espera del turno inicial */
+	NET_WAIT_SYN_TRN,
 	
 	/* A la espera por la confirmación del turno inicial */
 	NET_WAIT_SYN_TRN_ACK,
@@ -99,6 +105,8 @@ enum {
 int findfour_netinit (void);
 
 void process_netevent (int fd);
+
+void enviar_syn (int fd, Juego *juego, char *nick);
 
 #endif /* __NETPLAY_H__ */
 

@@ -127,6 +127,36 @@ int main (int argc, char *argv[]) {
 	return EXIT_SUCCESS;
 }
 
+Juego *crear_ventana (void) {
+	Juego *ventana;
+	static int start = 0;
+	
+	/* Crear una nueva ventana */
+	ventana = (Juego *) malloc (sizeof (Juego));
+	
+	ventana->prev = NULL;
+	ventana->next = primero;
+	ventana->w = 232; /* FIXME: Arreglar esto */
+	ventana->h = 324;
+	ventana->turno = 0;
+	ventana->inicio = RANDOM(2);
+	ventana->resalte = -1;
+	start += 20;
+	ventana->x = ventana->y = start;
+	
+	/* Vaciar el tablero */
+	memset (ventana->tablero, 0, sizeof (int[6][7]));
+	
+	if (primero == NULL) {
+		primero = ultimo = ventana;
+	} else {
+		primero->prev = ventana;
+		primero = ventana;
+	}
+	
+	return ventana;
+}
+
 int game_loop (void) {
 	int done = 0;
 	SDL_Event event;
@@ -166,6 +196,26 @@ int game_loop (void) {
 		
 		while (SDL_PollEvent(&event) > 0) {
 			switch (event.type) {
+				case SDL_KEYDOWN:
+					if (event.key.keysym.sym == SDLK_n) {
+						/* Crear una nueva ventana y conectar */
+						ventana = crear_ventana ();
+						
+						/* Cambiar el turno inicial a -1 hasta que el otro extremo nos asigne turno */
+						ventana->inicio = -1;
+						
+						/* Temporalmente asignar la IP */
+						struct sockaddr_in6 *bind_addr = (struct sockaddr_in6 *) &ventana->cliente;
+						
+						bind_addr->sin6_family = AF_INET6;
+						bind_addr->sin6_port = htons (CLIENT_PORT);
+						inet_pton (AF_INET6, "::1", &bind_addr->sin6_addr);
+						
+						ventana->tamsock = sizeof (ventana->cliente);
+						
+						enviar_syn (fd_sock, ventana, "Gatuno Cliente");
+					}
+					break;
 				case SDL_MOUSEBUTTONDOWN:
 					/* Primero, analizar si el evento cae dentro de alguna ventana */
 					
@@ -179,7 +229,7 @@ int game_loop (void) {
 							y -= ventana->y;
 							
 							if (x >= 64 && x < 168 && y < 22) {
-								printf ("Click por el agarre\n");
+								//printf ("Click por el agarre\n");
 								/* Click por el agarre */
 								drag_x = x;
 								drag_y = y;
@@ -306,8 +356,8 @@ int game_loop (void) {
 									
 									/* Poner la ficha en la posición [g][h] y avanzar turno */
 									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
-									ventana->turno++;
 									/* Enviar el turno */
+									enviar_movimiento (fd_sock, ventana, h);
 									ventana->resalte = -1;
 								}
 							}

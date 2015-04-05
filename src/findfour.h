@@ -56,7 +56,10 @@ typedef struct _Juego {
 	/* Campo last_time response */
 } Juego;
 
-extern Juego *primero, *ultimo;
+/* Funciones públicas */
+Juego *crear_ventana (void);
+
+extern Juego *primero;
 
 #endif /* __FINDFOUR_H__ */
 
