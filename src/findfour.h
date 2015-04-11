@@ -36,24 +36,32 @@
 typedef struct _Juego {
 	int id;
 	
+	/* Coordenadas de la ventana */
 	int x, y;
 	int w, h;
 	
+	/* Para la lista ligada */
 	struct _Juego *prev, *next;
 	
+	/* Quién empieza el juego y el turno actual */
 	int inicio;
 	int turno;
 	int resalte;
 	
+	/* El tablero, 0 = nada, 1 = ficha roja, 2 = ficha azul */
 	int tablero[6][7];
 	
+	/* La dirección del cliente */
 	struct sockaddr_storage cliente;
 	socklen_t tamsock;
 	
+	/* El nick del otro jugador */
 	char nick[NICK_SIZE];
 	
+	/* Estado del protocolo de red */
 	int estado;
-	/* Campo last_time response */
+	Uint32 last_response;
+	int retry;
 } Juego;
 
 /* Funciones públicas */

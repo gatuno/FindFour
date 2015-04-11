@@ -30,6 +30,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+/* Para SDL_GetTicks */
+#include <SDL.h>
+
 #include "findfour.h"
 #include "netplay.h"
 
@@ -113,7 +116,9 @@ int pack (FF_NET *net, char *buffer) {
 		/* Copiar la parte del ack */
 		buffer[2 + NICK_SIZE] = net->syn_ack.ack.ack;
 		/* La otra parte del ack no nos interesa en este caso */
-		return 3 + NICK_SIZE;
+		buffer[3 + NICK_SIZE] = net->syn_ack.ack.col;
+		
+		return 4 + NICK_SIZE;
 	} else if (net->flags.syn) {
 		buffer[1] = net->syn.version;
 		memcpy (buffer + 2, &net->syn.nick, NICK_SIZE);
@@ -373,8 +378,9 @@ void process_netevent (int fd) {
 								if (netmsg.trn.turno == ventana->turno) {
 									h = netmsg.trn.columna;
 									
-									if (ventana->tablero[5][h] != 0) {
+									if (ventana->tablero[0][h] != 0) {
 										/* Tablero lleno, columna equivocada */
+										printf ("Columna llena, no deberias poner fichas ahí\n");
 									} else {
 										g = 5;
 										while (g > 0 && ventana->tablero[g][h] != 0) g--;
@@ -396,7 +402,7 @@ void process_netevent (int fd) {
 							/* Llegó el ack de nuestro movimiento enviado */
 							printf ("Recibí ACK\n");
 							printf ("Recibe el número de turno: %i, mi turno es %i\n", netmsg.ack.ack, ventana->turno);
-							if (netmsg.ack.ack == ventana->turno + 1) {
+							if (netmsg.ack.ack == ventana->turno) {
 								ventana->estado = NET_READY;
 								//ventana->turno++;
 								/* TODO: Revisar la fila en la que cayó */

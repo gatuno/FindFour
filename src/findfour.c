@@ -436,8 +436,8 @@ int game_loop (void) {
 				}
 				rect.w = images[IMG_BIGCOINRED]->w;
 				rect.h = images[IMG_BIGCOINRED]->h;
-				
-				if (ventana->turno % 2 == ventana->inicio) {
+				//printf ("Para hacer el resalte, turno: %i, Inicio: %i, Turno %% 2: %i\n", ventana->turno, ventana->inicio, (ventana->turno %2));
+				if (ventana->turno % 2 == 0) { /* El que empieza siempre es rojo */
 					SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
 				} else {
 					SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
