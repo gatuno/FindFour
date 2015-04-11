@@ -25,14 +25,18 @@
 
 #include "findfour.h"
 
+#define NET_TIMER 1850
+
 /* Estructuras de red */
 typedef struct _FF_SYN {
 	uint8_t version;
 	char nick[NICK_SIZE];
+	uint32_t magic;
 } FF_SYN;
 
 typedef struct _FF_ACK {
 	uint8_t ack;
+	uint8_t columna;
 	uint8_t fila;
 } FF_ACK;
 
@@ -55,19 +59,14 @@ typedef struct _FF_TRN_ACK {
 	FF_ACK ack;
 } FF_TRN_ACK;
 
-typedef union {
-	uint8_t flags; /* Para forzar el tamaño a uint8_t */
-	struct {
-		unsigned int ack : 1;
-		unsigned int syn : 1;
-		unsigned int trn : 1;
-		unsigned int rst : 1;
-	};
-} FF_Flags;
+#define FLAG_ACK 0x01
+#define FLAG_SYN 0x02
+#define FLAG_TRN 0x04
+#define FLAG_RST 0x08
 
 /* Estructura para el mensaje de red */
 typedef struct _FF_NET {
-	FF_Flags flags;
+	uint8_t flags;
 	union {
 		FF_SYN syn;
 		FF_ACK ack;
@@ -107,6 +106,7 @@ int findfour_netinit (void);
 void process_netevent (int fd);
 
 void enviar_syn (int fd, Juego *juego, char *nick);
+void enviar_movimiento (int, Juego *);
 
 #endif /* __NETPLAY_H__ */
 

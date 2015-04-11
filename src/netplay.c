@@ -72,11 +72,11 @@ int findfour_netinit (void) {
 void unpack (FF_NET *net, char *buffer, size_t len) {
 	memset (net, 0, sizeof (FF_NET));
 	/* Las banderas son uint8, no tienen ningún problema */
-	net->flags.flags = buffer[0];
+	net->flags = buffer[0];
 	
-	if (net->flags.syn && net->flags.trn) {
+	if ((net->flags & (FLAG_SYN | FLAG_TRN)) == (FLAG_SYN | FLAG_TRN)) {
 		net->syn_trn.inicio = buffer[1];
-	} else if (net->flags.syn && net->flags.ack) {
+	} else if (net->flags == (FLAG_SYN | FLAG_ACK)) {
 		/* Copiar la parte del syn */
 		net->syn_ack.syn.version = buffer[1];
 		memcpy (&net->syn_ack.syn.nick, buffer + 2, NICK_SIZE);
@@ -84,31 +84,35 @@ void unpack (FF_NET *net, char *buffer, size_t len) {
 		/* Copiar la parte del ack */
 		net->syn_ack.ack.ack = buffer[2 + NICK_SIZE];
 		/* La otra parte del ack no nos interesa en este caso */
-	} else if (net->flags.syn) {
+		net->syn_ack.ack.columna = buffer[3 + NICK_SIZE];
+		net->syn_ack.ack.fila = buffer[4 + NICK_SIZE];
+	} else if (net->flags == FLAG_SYN) {
 		net->syn.version = buffer[1];
 		memcpy (&net->syn.nick, buffer + 2, NICK_SIZE);
-	} else if (net->flags.ack && net->flags.trn) {
-		net->trn_ack.ack.ack = buffer[1];
-		net->trn_ack.ack.fila = buffer[2];
+	} else if (net->flags == (FLAG_ACK | FLAG_TRN)) {
+		net->trn_ack.trn.turno = buffer[1];
+		net->trn_ack.trn.columna = buffer[2];
 		
-		net->trn_ack.trn.turno = buffer[3];
-		net->trn_ack.trn.columna = buffer[4];
-	} else if (net->flags.trn) {
+		net->trn_ack.ack.ack = buffer[3];
+		net->trn_ack.ack.columna = buffer[4];
+		net->trn_ack.ack.fila = buffer[5];
+	} else if (net->flags == FLAG_TRN) {
 		net->trn.turno = buffer[1];
 		net->trn.columna = buffer[2];
-	} else if (net->flags.ack) {
+	} else if (net->flags == FLAG_ACK) {
 		net->ack.ack = buffer[1];
-		net->ack.fila = buffer[2];
+		net->ack.columna = buffer[2];
+		net->ack.fila = buffer[3];
 	}
 }
 
 int pack (FF_NET *net, char *buffer) {
-	buffer[0] = net->flags.flags;
+	buffer[0] = net->flags;
 	
-	if (net->flags.syn && net->flags.trn) {
+	if ((net->flags & (FLAG_SYN | FLAG_TRN)) == (FLAG_SYN | FLAG_TRN)) {
 		buffer[1] = net->syn_trn.inicio;
 		return 2;
-	} else if (net->flags.syn && net->flags.ack) {
+	} else if (net->flags == (FLAG_SYN | FLAG_ACK)) {
 		/* Copiar la parte del syn */
 		buffer[1] = net->syn_ack.syn.version;
 		memcpy (buffer + 2, &net->syn_ack.syn.nick, NICK_SIZE);
@@ -116,31 +120,34 @@ int pack (FF_NET *net, char *buffer) {
 		/* Copiar la parte del ack */
 		buffer[2 + NICK_SIZE] = net->syn_ack.ack.ack;
 		/* La otra parte del ack no nos interesa en este caso */
-		buffer[3 + NICK_SIZE] = net->syn_ack.ack.col;
+		buffer[3 + NICK_SIZE] = net->syn_ack.ack.columna;
+		buffer[4 + NICK_SIZE] = net->syn_ack.ack.fila;
 		
-		return 4 + NICK_SIZE;
-	} else if (net->flags.syn) {
+		return 5 + NICK_SIZE;
+	} else if (net->flags == FLAG_SYN) {
 		buffer[1] = net->syn.version;
 		memcpy (buffer + 2, &net->syn.nick, NICK_SIZE);
 		return 2 + NICK_SIZE;
-	} else if (net->flags.ack && net->flags.trn) {
-		buffer[1] = net->trn_ack.ack.ack;
-		buffer[2] = net->trn_ack.ack.fila;
+	} else if (net->flags == (FLAG_ACK | FLAG_TRN)) {
+		buffer[1] = net->trn_ack.trn.turno;
+		buffer[2] = net->trn_ack.trn.columna;
 		
-		buffer[3] = net->trn_ack.trn.turno;
-		buffer[4] = net->trn_ack.trn.columna;
+		buffer[3] = net->trn_ack.ack.ack;
+		buffer[4] = net->trn_ack.ack.columna;
+		buffer[5] = net->trn_ack.ack.fila;
 		
-		return 5;
-	} else if (net->flags.trn) {
+		return 6;
+	} else if (net->flags == FLAG_TRN) {
 		buffer[1] = net->trn.turno;
 		buffer[2] = net->trn.columna;
 		
 		return 3;
-	} else if (net->flags.ack) {
+	} else if (net->flags == FLAG_ACK) {
 		buffer[1] = net->ack.ack;
-		buffer[2] = net->ack.fila;
+		buffer[2] = net->ack.columna;
+		buffer[3] = net->ack.fila;
 		
-		return 3;
+		return 4;
 	}
 }
 
@@ -178,9 +185,9 @@ void enviar_syn (int fd, Juego *juego, char *nick) {
 	
 	memset (&net, 0, sizeof (net));
 	
-	net.flags.syn = 1;
+	net.flags = FLAG_SYN;
 	net.syn.version = 0;
-	memcpy (net.syn.nick, nick, NICK_SIZE);
+	strcpy (net.syn.nick, nick);
 	
 	len = pack (&net, buffer);
 	
@@ -190,6 +197,28 @@ void enviar_syn (int fd, Juego *juego, char *nick) {
 	printf ("Envié mi SYN al peer\n");
 }
 
+void enviar_syn_ack (int fd, Juego *juego, char *nick) {
+	FF_NET net;
+	char buffer[256];
+	int len;
+	
+	/* Preparar y enviar un mensaje de SYN + ACK */
+	memset (&net, 0, sizeof (net));
+	
+	net.flags = FLAG_SYN | FLAG_ACK;
+	net.syn_ack.syn.version = 0;
+	strcpy (net.syn_ack.syn.nick, nick);
+	
+	net.syn_ack.ack.ack = 0;
+	
+	len = pack (&net, buffer);
+	
+	sendto (fd, buffer, len, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	juego->estado = NET_WAIT_ACK_0;
+	
+	printf ("Envié mi SYN + ACK al peer\n");
+}
+
 void enviar_syn_trn (int fd, Juego *juego) {
 	FF_NET net;
 	char buffer [256];
@@ -197,7 +226,7 @@ void enviar_syn_trn (int fd, Juego *juego) {
 	
 	memset (&net, 0, sizeof (net));
 	
-	net.flags.syn = net.flags.trn = 1;
+	net.flags = FLAG_SYN | FLAG_TRN;
 	net.syn_trn.inicio = juego->inicio;
 	
 	len = pack (&net, buffer);
@@ -220,7 +249,7 @@ void enviar_syn_trn_ack (int fd, Juego *juego) {
 	
 	memset (&net, 0, sizeof (net));
 	
-	net.flags.syn = net.flags.trn = net.flags.ack = 1;
+	net.flags = FLAG_SYN | FLAG_ACK | FLAG_TRN;
 	net.syn_trn.inicio = juego->inicio;
 	
 	len = pack (&net, buffer);
@@ -228,7 +257,7 @@ void enviar_syn_trn_ack (int fd, Juego *juego) {
 	sendto (fd, buffer, len, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->estado = NET_READY;
 	
-	printf ("Respondimos con la confirmación de quién empieza, ");
+	printf ("\tRespondimos con la confirmación de quién empieza, ");
 	if (juego->inicio == 0) {
 		printf ("nosotros\n");
 	} else {
@@ -236,15 +265,16 @@ void enviar_syn_trn_ack (int fd, Juego *juego) {
 	}
 }
 
-void enviar_ack (int fd, Juego *juego, int fila) {
+void enviar_ack (int fd, Juego *juego) {
 	FF_NET net;
 	char buffer [256];
 	int len;
 	
 	memset (&net, 0, sizeof (net));
-	net.flags.ack = 1;
-	net.ack.ack = juego->turno;
-	net.ack.fila = fila;
+	net.flags = FLAG_ACK;
+	net.ack.ack = juego->ack_turno;
+	net.ack.columna = juego->ack_columna;
+	net.ack.fila = juego->ack_fila;
 	
 	len = pack (&net, buffer);
 	
@@ -259,7 +289,7 @@ void enviar_ack_0 (int fd, Juego *juego) {
 	int len;
 	
 	memset (&net, 0, sizeof (net));
-	net.flags.ack = 1;
+	net.flags = FLAG_ACK;
 	net.ack.ack = 0;
 	
 	len = pack (&net, buffer);
@@ -269,17 +299,15 @@ void enviar_ack_0 (int fd, Juego *juego) {
 	printf ("Envié ack 0 del syn que me envió el servidor\n");
 }
 
-void enviar_movimiento (int fd, Juego *juego, int col) {
+void enviar_movimiento (int fd, Juego *juego) {
 	FF_NET net;
 	char buffer [256];
 	int len;
 	
 	memset (&net, 0, sizeof (net));
-	net.flags.trn = 1;
-	net.trn.turno = juego->turno;
-	net.trn.columna = col;
-	
-	juego->turno++;
+	net.flags = FLAG_TRN;
+	net.trn.turno = juego->send_turno;
+	net.trn.columna = juego->send_columna;
 	
 	len = pack (&net, buffer);
 	
@@ -289,12 +317,38 @@ void enviar_movimiento (int fd, Juego *juego, int col) {
 	printf ("Envié mi movimiento al otro extremo\n");
 }
 
+void dump_flags (int flags) {
+	printf ("Banderas activas: ");
+	if (flags & FLAG_ACK) {
+		printf ("ACK, ");
+	}
+	
+	if (flags & FLAG_SYN) {
+		printf ("SYN, ");
+	}
+	
+	if (flags & FLAG_TRN) {
+		printf ("TRN, ");
+	}
+	
+	if (flags & FLAG_RST) {
+		printf ("RST, ");
+	}
+	
+	if (flags & 0xF0) {
+		printf ("Reservados");
+	}
+	
+	printf ("\n");
+}
+
 void process_netevent (int fd) {
 	char buffer [256];
 	int len;
 	FF_NET netmsg;
-	Juego *ventana;
+	Juego *ventana, *next;
 	int g, h;
+	Uint32 now_time;
 	
 	struct sockaddr_storage cliente;
 	socklen_t tamsock;
@@ -316,31 +370,46 @@ void process_netevent (int fd) {
 				switch (ventana->estado) {
 					case NET_WAIT_SYN_ACK:
 						/* Esperamos el nick y ack del servidor */
-						if (netmsg.flags.syn && netmsg.flags.ack && !netmsg.flags.trn) {
+						if (netmsg.flags == (FLAG_SYN | FLAG_ACK)) {
 							printf ("Recibí SYN + ACK, copiando\n");
 							/* Copiar el nick del servidor */
 							memcpy (ventana->nick, netmsg.syn.nick, NICK_SIZE);
 							enviar_ack_0 (fd, ventana);
+							ventana->retry = 0;
+							ventana->last_response = SDL_GetTicks ();
 						} else {
-							printf ("No esperado\n");
+							printf ("No esperado 1\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 					case NET_WAIT_ACK_0 :
 						/* Esperamos un ACK */
-						if (!netmsg.flags.syn && netmsg.flags.ack && !netmsg.flags.trn && netmsg.ack.ack == 0) {
+						if (netmsg.flags == FLAG_ACK && netmsg.ack.ack == 0) {
 							/* Recibir y enviar quién empieza el baile */
 							printf ("Recibí el ack 0\n");
+							
+							ventana->inicio = RANDOM (2);
 							enviar_syn_trn (fd, ventana);
+							ventana->retry = 0;
+							ventana->last_response = SDL_GetTicks ();
+						} else if (netmsg.flags == FLAG_SYN) {
+							/* Si volvimos a recibir un SYN es una repetición
+							 * Reenviamos el SYN + ACK y aumentamos la cantidad de repeticiones */
+							enviar_syn_ack (fd, ventana, "Gatuno");
+							ventana->retry++;
+							ventana->last_response = SDL_GetTicks ();
 						} else {
 							/* En caso contrario, no me gusta esta conexión, me envió algo no solicitado */
 							/* FIXME: ¿Qué hago con esta conexión? */
-							printf ("No esperado\n");
+							printf ("No esperado 2\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 					case NET_WAIT_SYN_TRN:
-						if (netmsg.flags.syn && netmsg.flags.trn && !netmsg.flags.ack) {
+						if (netmsg.flags == (FLAG_SYN | FLAG_TRN)) {
 							/* Recibí el turno, cambiar quién empieza */
 							printf ("Recibí SYN + TRN\n");
+							printf ("\tInicio recibido: %i\n", netmsg.syn_trn.inicio);
 							if (netmsg.syn_trn.inicio == 0) {
 								/* Ellos empiezan */
 								ventana->inicio = 1;
@@ -350,55 +419,89 @@ void process_netevent (int fd) {
 							}
 							
 							enviar_syn_trn_ack (fd, ventana);
+							ventana->retry = 0;
+							ventana->last_response = SDL_GetTicks ();
+						} else if (netmsg.flags == (FLAG_SYN | FLAG_ACK)) {
+							/* Volver a enviar el ACK 0 */
+							printf ("Reenviando ACK 0\n");
+							enviar_ack_0 (fd, ventana);
+							ventana->retry++;
+							ventana->last_response = SDL_GetTicks ();
 						} else {
-							printf ("No esperado\n");
+							printf ("No esperado 3\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 					case NET_WAIT_SYN_TRN_ACK:
 						/* Esperamos su confirmación de inicio de turno invertida, para que quede claro que quién inicia */
-						if (netmsg.flags.syn && netmsg.flags.ack && netmsg.flags.trn) {
+						if (netmsg.flags == (FLAG_SYN | FLAG_ACK | FLAG_TRN)) {
 							printf ("Recibí SYN + TRN + ACK\n");
 							if (ventana->inicio == netmsg.syn_trn.inicio) {
 								printf ("Problema, el otro extremo espera ser primero\n");
+								ventana->retry++;
 							} else {
 								/* Todo bien, pasar a jugar */
 								ventana->estado = NET_READY;
 								printf ("Paso al juego\n");
+								ventana->retry = 0;
 							}
+							ventana->last_response = SDL_GetTicks ();
+						} else if (netmsg.flags == FLAG_ACK && netmsg.ack.ack == 0) {
+							printf ("Reenviando SYN + TRN\n");
+							enviar_syn_trn (fd, ventana);
+							ventana->retry++;
+							ventana->last_response = SDL_GetTicks ();
+						} else {
+							printf ("No esperado 4\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 					case NET_READY:
-						if (netmsg.flags.trn && !netmsg.flags.ack && !netmsg.flags.syn) {
-							if (ventana->turno % 2 == ventana->inicio) {
+						if (netmsg.flags == FLAG_TRN) {
+							printf ("Recibe el número de turno: %i, mi turno es %i\n", netmsg.trn.turno, ventana->turno);
+							if (netmsg.trn.turno == ventana->ack_turno) {
+								/* Enviar nuestro último ACK porque volví a recibir el último turno, es una clara invitación a repetir mi ack */
+								enviar_ack (fd, ventana);
+							} else if (ventana->turno % 2 == ventana->inicio) {
 								/* Es nuestro turno y nos envian un movimiento, es un error. Repetir el último ack nuestro */
 								printf ("Turno incorrecto\n");
-							} else {
+								enviar_ack (fd, ventana);
+							} else if (netmsg.trn.turno == ventana->turno) {
 								/* Recibir el movimiento y responder con el ack */
-								printf ("Recibe el número de turno: %i, mi turno es %i\n", netmsg.trn.turno, ventana->turno);
-								if (netmsg.trn.turno == ventana->turno) {
-									h = netmsg.trn.columna;
-									
-									if (ventana->tablero[0][h] != 0) {
-										/* Tablero lleno, columna equivocada */
-										printf ("Columna llena, no deberias poner fichas ahí\n");
-									} else {
-										g = 5;
-										while (g > 0 && ventana->tablero[g][h] != 0) g--;
-										
-										/* Poner la ficha en la posición [g][h] y avanzar turno */
-										ventana->tablero[g][h] = (ventana->turno % 2) + 1;
-										ventana->turno++;
-										/* Enviar el ack */
-										enviar_ack (fd, ventana, g);
-									}
+								h = netmsg.trn.columna;
+								
+								if (ventana->tablero[0][h] != 0) {
+									/* Tablero lleno, columna equivocada */
+									/* FIXME: Detener esta partida */
+									printf ("Columna llena, no deberias poner fichas ahí\n");
 								} else {
-									/* Número equivocado de turno */
+									g = 5;
+									while (g > 0 && ventana->tablero[g][h] != 0) g--;
+									
+									/* Poner la ficha en la posición [g][h] y avanzar turno */
+									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
+									ventana->ack_turno = ++ventana->turno;
+									ventana->ack_fila = g;
+									ventana->ack_columna = h;
+									/* Enviar el ack */
+									enviar_ack (fd, ventana);
 								}
+							} else {
+								/* Número equivocado de turno */
 							}
+						} else if (netmsg.flags == (FLAG_SYN | FLAG_TRN)) {
+							/* Reenviar nuestro SYN + ACK + TRN */
+							printf ("Reenviando SYN + ACK + TRN\n");
+							enviar_syn_trn_ack (fd, ventana);
+							ventana->retry++;
+							ventana->last_response = SDL_GetTicks ();
+						} else {
+							printf ("Paquete incorrecto 5\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 					case NET_WAIT_ACK:
-						if (netmsg.flags.ack && !netmsg.flags.trn && !netmsg.flags.syn) {
+						if (netmsg.flags == FLAG_ACK) {
 							/* Llegó el ack de nuestro movimiento enviado */
 							printf ("Recibí ACK\n");
 							printf ("Recibe el número de turno: %i, mi turno es %i\n", netmsg.ack.ack, ventana->turno);
@@ -410,8 +513,16 @@ void process_netevent (int fd) {
 								/* Confirmación de turno incorrecto */
 								printf ("Confirmación de turno incorrecto\n");
 							}
+						} else if (netmsg.flags == (FLAG_SYN | FLAG_TRN)) {
+							/* Reenviar nuestro SYN + ACK + TRN
+							 * y reenviar el movimiento enviado 
+							 */
+							printf ("Reenviando SYN + ACK + TRN y mi turno enviado\n");
+							enviar_syn_trn_ack (fd, ventana);
+							enviar_movimiento (fd, ventana);
 						} else {
-							printf ("Paquete equivocado\n");
+							printf ("Paquete equivocado 6\n\t");
+							dump_flags (netmsg.flags);
 						}
 						break;
 				}
@@ -420,7 +531,7 @@ void process_netevent (int fd) {
 			}
 		}
 		
-		if (netmsg.flags.syn == 1 && netmsg.flags.ack == 0 && netmsg.flags.trn == 0) {
+		if (netmsg.flags == FLAG_SYN) {
 			/* Nuevo juego entrante */
 			ventana = crear_ventana ();
 			
@@ -431,22 +542,59 @@ void process_netevent (int fd) {
 			/* Copiar el nick del otro jugador */
 			memcpy (ventana->nick, netmsg.syn.nick, NICK_SIZE);
 			
-			/* Preparar y enviar un mensaje de SYN + ACK */
-			memset (&netmsg, 0, sizeof (netmsg));
-			
-			netmsg.flags.syn = netmsg.flags.ack = 1;
-			netmsg.syn_ack.syn.version = 0;
-			memcpy (netmsg.syn_ack.syn.nick, "Gatuno", strlen ("Gatuno") + 1);
-			
-			netmsg.syn_ack.ack.ack = 0;
-			
-			len = pack (&netmsg, buffer);
-			
-			printf ("Nueva conexión entrante, envié SYN + ACK\n");
-			sendto (fd, buffer, len, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-			ventana->estado = NET_WAIT_ACK_0;
+			printf ("Nueva conexión entrante\n");
+			enviar_syn_ack (fd, ventana, "Gatuno");
+			ventana->last_response = SDL_GetTicks ();
+			ventana->retry = 0;
 		}
 	} while (1);
+	
+	/* Después de procesar los eventos de entrada,
+	 * revisar los timers, para reenviar eventos */
+	ventana = primero;
+	now_time = SDL_GetTicks();
+	
+	while (ventana != NULL) {
+		if (ventana->retry >= 5) {
+			/* Demasiados intentos */
+			next = ventana->next;
+			eliminar_ventana (ventana);
+			
+			ventana = next;
+			continue;
+		}
+		
+		if (now_time > ventana->last_response + NET_TIMER) {
+			switch (ventana->estado) {
+				case NET_WAIT_ACK_0:
+					printf ("Reenviando SYN + ACK por timer\n");
+					enviar_syn_ack (fd, ventana, "Gatuno");
+					break;
+				case NET_WAIT_SYN_ACK:
+					printf ("Reenviando el SYN inicial por timer\n");
+					enviar_syn (fd, ventana, "Gatuno Cliente");
+					break;
+				case NET_WAIT_SYN_TRN:
+					printf ("Reenviando ACK 0 por timer\n");
+					enviar_ack_0 (fd, ventana);
+					break;
+				case NET_WAIT_SYN_TRN_ACK:
+					printf ("Reenviando SYN + TRN por timer\n");
+					enviar_syn_trn (fd, ventana);
+					break;
+				case NET_WAIT_ACK:
+					printf ("Reenviando ACK de mi turno por timer\n");
+					enviar_movimiento (fd, ventana);
+					break;
+			}
+			if (ventana->estado != NET_READY) {
+				ventana->retry++;
+				printf ("\tAumentando cantidad de intentos a %i\n", ventana->retry);
+				ventana->last_response = SDL_GetTicks ();
+			}
+		}
+		
+		ventana = ventana->next;
+	}
 }
-
 

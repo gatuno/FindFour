@@ -62,10 +62,19 @@ typedef struct _Juego {
 	int estado;
 	Uint32 last_response;
 	int retry;
+	
+	uint8_t ack_turno;
+	uint8_t ack_columna;
+	uint8_t ack_fila;
+	
+	uint8_t send_turno;
+	uint8_t send_columna;
+	uint8_t send_fila;
 } Juego;
 
 /* Funciones públicas */
 Juego *crear_ventana (void);
+void eliminar_ventana (Juego *juego);
 
 extern Juego *primero;
 

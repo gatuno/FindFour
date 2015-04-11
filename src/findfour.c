@@ -139,10 +139,12 @@ Juego *crear_ventana (void) {
 	ventana->w = 232; /* FIXME: Arreglar esto */
 	ventana->h = 324;
 	ventana->turno = 0;
-	ventana->inicio = RANDOM(2);
+	ventana->inicio = -1;
 	ventana->resalte = -1;
 	start += 20;
 	ventana->x = ventana->y = start;
+	
+	ventana->ack_turno = ventana->send_turno = -1;
 	
 	/* Vaciar el tablero */
 	memset (ventana->tablero, 0, sizeof (int[6][7]));
@@ -155,6 +157,23 @@ Juego *crear_ventana (void) {
 	}
 	
 	return ventana;
+}
+
+void eliminar_ventana (Juego *juego) {
+	/* Desligar completamente */
+	if (juego->prev != NULL) {
+		juego->prev->next = juego->next;
+	} else {
+		primero = juego->next;
+	}
+	
+	if (juego->next != NULL) {
+		juego->next->prev = juego->prev;
+	} else {
+		ultimo = juego->prev;
+	}
+	
+	free (juego);
 }
 
 int game_loop (void) {
@@ -200,9 +219,6 @@ int game_loop (void) {
 					if (event.key.keysym.sym == SDLK_n) {
 						/* Crear una nueva ventana y conectar */
 						ventana = crear_ventana ();
-						
-						/* Cambiar el turno inicial a -1 hasta que el otro extremo nos asigne turno */
-						ventana->inicio = -1;
 						
 						/* Temporalmente asignar la IP */
 						struct sockaddr_in6 *bind_addr = (struct sockaddr_in6 *) &ventana->cliente;
@@ -356,8 +372,13 @@ int game_loop (void) {
 									
 									/* Poner la ficha en la posición [g][h] y avanzar turno */
 									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
+									
+									/* Registrar la última columna y la última fila */
+									ventana->send_turno = ventana->turno++;
+									ventana->send_columna = h;
+									ventana->send_fila = g;
 									/* Enviar el turno */
-									enviar_movimiento (fd_sock, ventana, h);
+									enviar_movimiento (fd_sock, ventana);
 									ventana->resalte = -1;
 								}
 							}
