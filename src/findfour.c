@@ -115,10 +115,18 @@ static int id = 1;
 const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
 const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 
+int client_port, server_port;
+
 int main (int argc, char *argv[]) {
 	
 	setup ();
+	client_port = 3301;
+	server_port = 3300;
 	
+	if (argc > 2) {
+		client_port = atoi (argv[1]);
+		server_port = atoi (argv[2]);
+	}
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
@@ -199,7 +207,7 @@ int game_loop (void) {
 	
 	drag = NULL;
 	
-	fd_sock = findfour_netinit ();
+	fd_sock = findfour_netinit (server_port);
 	
 	if (fd_sock < 0) {
 		/* Mostrar ventana de error */
@@ -221,15 +229,18 @@ int game_loop (void) {
 						ventana = crear_ventana ();
 						
 						/* Temporalmente asignar la IP */
-						struct sockaddr_in6 *bind_addr = (struct sockaddr_in6 *) &ventana->cliente;
+						struct sockaddr_in *bind_addr = (struct sockaddr_in *) &ventana->cliente;
 						
-						bind_addr->sin6_family = AF_INET6;
-						bind_addr->sin6_port = htons (CLIENT_PORT);
-						inet_pton (AF_INET6, "::1", &bind_addr->sin6_addr);
+						bind_addr->sin_family = AF_INET;
+						bind_addr->sin_port = htons (client_port);
+						inet_pton (AF_INET, "127.0.0.1", &bind_addr->sin_addr);
 						
 						ventana->tamsock = sizeof (ventana->cliente);
 						
+						ventana->magic = (RANDOM (65535) << 16) | RANDOM (65535);
 						enviar_syn (fd_sock, ventana, "Gatuno Cliente");
+						ventana->retry = 0;
+						ventana->last_response = SDL_GetTicks ();
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:

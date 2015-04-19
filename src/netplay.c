@@ -36,7 +36,7 @@
 #include "findfour.h"
 #include "netplay.h"
 
-int findfour_netinit (void) {
+int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
 	struct sockaddr_in6 *ipv6;
 	int fd;
@@ -52,7 +52,7 @@ int findfour_netinit (void) {
 	ipv6 = (struct sockaddr_in6 *) &bind_addr;
 	
 	ipv6->sin6_family = AF_INET6;
-	ipv6->sin6_port = htons (SERVER_PORT);
+	ipv6->sin6_port = htons (puerto);
 	ipv6->sin6_flowinfo = 0;
 	memcpy (&ipv6->sin6_addr, &in6addr_any, sizeof (in6addr_any));
 	
@@ -70,6 +70,7 @@ int findfour_netinit (void) {
 }
 
 void unpack (FF_NET *net, char *buffer, size_t len) {
+	uint32_t magic;
 	memset (net, 0, sizeof (FF_NET));
 	/* Las banderas son uint8, no tienen ningún problema */
 	net->flags = buffer[0];
@@ -81,14 +82,19 @@ void unpack (FF_NET *net, char *buffer, size_t len) {
 		net->syn_ack.syn.version = buffer[1];
 		memcpy (&net->syn_ack.syn.nick, buffer + 2, NICK_SIZE);
 		
+		memcpy (&magic, buffer + 2 + NICK_SIZE, sizeof (magic));
+		net->syn_ack.syn.magic = ntohl (magic);
 		/* Copiar la parte del ack */
-		net->syn_ack.ack.ack = buffer[2 + NICK_SIZE];
+		net->syn_ack.ack.ack = buffer[6 + NICK_SIZE];
 		/* La otra parte del ack no nos interesa en este caso */
-		net->syn_ack.ack.columna = buffer[3 + NICK_SIZE];
-		net->syn_ack.ack.fila = buffer[4 + NICK_SIZE];
+		net->syn_ack.ack.columna = buffer[7 + NICK_SIZE];
+		net->syn_ack.ack.fila = buffer[8 + NICK_SIZE];
 	} else if (net->flags == FLAG_SYN) {
 		net->syn.version = buffer[1];
 		memcpy (&net->syn.nick, buffer + 2, NICK_SIZE);
+		
+		memcpy (&magic, buffer + 2 + NICK_SIZE, sizeof (magic));
+		net->syn.magic = ntohl (magic);
 	} else if (net->flags == (FLAG_ACK | FLAG_TRN)) {
 		net->trn_ack.trn.turno = buffer[1];
 		net->trn_ack.trn.columna = buffer[2];
@@ -107,6 +113,7 @@ void unpack (FF_NET *net, char *buffer, size_t len) {
 }
 
 int pack (FF_NET *net, char *buffer) {
+	uint32_t magic;
 	buffer[0] = net->flags;
 	
 	if ((net->flags & (FLAG_SYN | FLAG_TRN)) == (FLAG_SYN | FLAG_TRN)) {
@@ -117,17 +124,22 @@ int pack (FF_NET *net, char *buffer) {
 		buffer[1] = net->syn_ack.syn.version;
 		memcpy (buffer + 2, &net->syn_ack.syn.nick, NICK_SIZE);
 		
-		/* Copiar la parte del ack */
-		buffer[2 + NICK_SIZE] = net->syn_ack.ack.ack;
-		/* La otra parte del ack no nos interesa en este caso */
-		buffer[3 + NICK_SIZE] = net->syn_ack.ack.columna;
-		buffer[4 + NICK_SIZE] = net->syn_ack.ack.fila;
+		magic = htonl (net->syn_ack.syn.magic);
+		memcpy (buffer + 2 + NICK_SIZE, &magic, sizeof (magic));
 		
-		return 5 + NICK_SIZE;
+		/* Copiar la parte del ack */
+		buffer[6 + NICK_SIZE] = net->syn_ack.ack.ack;
+		/* La otra parte del ack no nos interesa en este caso */
+		buffer[7 + NICK_SIZE] = net->syn_ack.ack.columna;
+		buffer[8 + NICK_SIZE] = net->syn_ack.ack.fila;
+		
+		return 9 + NICK_SIZE;
 	} else if (net->flags == FLAG_SYN) {
 		buffer[1] = net->syn.version;
 		memcpy (buffer + 2, &net->syn.nick, NICK_SIZE);
-		return 2 + NICK_SIZE;
+		magic = htonl (net->syn.magic);
+		memcpy (buffer + 2 + NICK_SIZE, &magic, sizeof (magic));
+		return 6 + NICK_SIZE;
 	} else if (net->flags == (FLAG_ACK | FLAG_TRN)) {
 		buffer[1] = net->trn_ack.trn.turno;
 		buffer[2] = net->trn_ack.trn.columna;
@@ -188,6 +200,7 @@ void enviar_syn (int fd, Juego *juego, char *nick) {
 	net.flags = FLAG_SYN;
 	net.syn.version = 0;
 	strcpy (net.syn.nick, nick);
+	net.syn.magic = juego->magic;
 	
 	len = pack (&net, buffer);
 	
@@ -195,6 +208,7 @@ void enviar_syn (int fd, Juego *juego, char *nick) {
 	juego->estado = NET_WAIT_SYN_ACK;
 	
 	printf ("Envié mi SYN al peer\n");
+	printf ("Mi número magico: %"PRIu32"\n", net.syn.magic);
 }
 
 void enviar_syn_ack (int fd, Juego *juego, char *nick) {
@@ -208,7 +222,7 @@ void enviar_syn_ack (int fd, Juego *juego, char *nick) {
 	net.flags = FLAG_SYN | FLAG_ACK;
 	net.syn_ack.syn.version = 0;
 	strcpy (net.syn_ack.syn.nick, nick);
-	
+	net.syn_ack.syn.magic = juego->magic;
 	net.syn_ack.ack.ack = 0;
 	
 	len = pack (&net, buffer);
@@ -317,6 +331,21 @@ void enviar_movimiento (int fd, Juego *juego) {
 	printf ("Envié mi movimiento al otro extremo\n");
 }
 
+void enviar_keep_alive (int fd, Juego *juego) {
+	FF_NET net;
+	char buffer[256];
+	int len;
+	
+	memset (&net, 0, sizeof (net));
+	net.flags = FLAG_ALV;
+	
+	len = pack (&net, buffer);
+	
+	sendto (fd, buffer, len, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	juego->estado = NET_WAIT_KEEP_ALIVE;
+	printf ("Envié un keep alive al otro extremo\n");
+}
+
 void dump_flags (int flags) {
 	printf ("Banderas activas: ");
 	if (flags & FLAG_ACK) {
@@ -335,10 +364,13 @@ void dump_flags (int flags) {
 		printf ("RST, ");
 	}
 	
-	if (flags & 0xF0) {
-		printf ("Reservados");
+	if (flags & 0x10) {
+		printf ("ALV, ");
 	}
 	
+	if (flags & 0xE0) {
+		printf ("Reservados");
+	}
 	printf ("\n");
 }
 
@@ -349,6 +381,7 @@ void process_netevent (int fd) {
 	Juego *ventana, *next;
 	int g, h;
 	Uint32 now_time;
+	int manejado;
 	
 	struct sockaddr_storage cliente;
 	socklen_t tamsock;
@@ -362,6 +395,30 @@ void process_netevent (int fd) {
 		
 		unpack (&netmsg, buffer, len);
 		
+		manejado = FALSE;
+		if (netmsg.flags == (FLAG_SYN | FLAG_ACK)) {
+			/* Respuesta a mi SYN, buscar a la partida que espere un SYN + ACK y tenga el número magico correcto */
+			for (ventana = primero; ventana != NULL; ventana = ventana->next) {
+				if (ventana->estado == NET_WAIT_SYN_ACK && netmsg.syn_ack.syn.magic == ventana->magic) {
+					printf ("Recibí SYN + ACK, copiando - 2\n");
+					/* Copiar el nick del servidor */
+					memcpy (ventana->nick, netmsg.syn.nick, NICK_SIZE);
+					enviar_ack_0 (fd, ventana);
+					ventana->retry = 0;
+					ventana->last_response = SDL_GetTicks ();
+					
+					/* Volver a copiar la dirección IP del cliente */
+					memcpy (&ventana->cliente, &cliente, tamsock);
+					ventana->tamsock = tamsock;
+					
+					manejado = TRUE;
+				}
+			}
+			
+			/* Brincar al siguiente paquete recibido */
+			continue;
+		}
+		
 		/* Buscar el juego que haga match por la dirección IP */
 		for (ventana = primero; ventana != NULL; ventana = ventana->next) {
 			if (sockaddr_cmp ((struct sockaddr *) &cliente, (struct sockaddr *) &(ventana->cliente)) == 0) {
@@ -369,18 +426,9 @@ void process_netevent (int fd) {
 				printf ("Estado: Antes del procesamiento: %i\n", ventana->estado);
 				switch (ventana->estado) {
 					case NET_WAIT_SYN_ACK:
-						/* Esperamos el nick y ack del servidor */
-						if (netmsg.flags == (FLAG_SYN | FLAG_ACK)) {
-							printf ("Recibí SYN + ACK, copiando\n");
-							/* Copiar el nick del servidor */
-							memcpy (ventana->nick, netmsg.syn.nick, NICK_SIZE);
-							enviar_ack_0 (fd, ventana);
-							ventana->retry = 0;
-							ventana->last_response = SDL_GetTicks ();
-						} else {
-							printf ("No esperado 1\n\t");
-							dump_flags (netmsg.flags);
-						}
+						/* No debería recibir este paquete aquí */
+						printf ("No esperado 1\n\t");
+						dump_flags (netmsg.flags);
 						break;
 					case NET_WAIT_ACK_0 :
 						/* Esperamos un ACK */
@@ -456,6 +504,9 @@ void process_netevent (int fd) {
 							dump_flags (netmsg.flags);
 						}
 						break;
+					case NET_WAIT_KEEP_ALIVE:
+						
+						break;
 					case NET_READY:
 						if (netmsg.flags == FLAG_TRN) {
 							printf ("Recibe el número de turno: %i, mi turno es %i\n", netmsg.trn.turno, ventana->turno);
@@ -528,10 +579,11 @@ void process_netevent (int fd) {
 				}
 				
 				printf ("Estado: post al procesamiento: %i\n", ventana->estado);
+				break;
 			}
 		}
 		
-		if (netmsg.flags == FLAG_SYN) {
+		if (ventana == NULL && netmsg.flags == FLAG_SYN) {
 			/* Nuevo juego entrante */
 			ventana = crear_ventana ();
 			
@@ -541,6 +593,10 @@ void process_netevent (int fd) {
 			
 			/* Copiar el nick del otro jugador */
 			memcpy (ventana->nick, netmsg.syn.nick, NICK_SIZE);
+			
+			/* Copiar el número mágico */
+			ventana->magic = netmsg.syn.magic;
+			ventana->estado = NET_WAIT_ACK_0;
 			
 			printf ("Nueva conexión entrante\n");
 			enviar_syn_ack (fd, ventana, "Gatuno");
@@ -585,6 +641,12 @@ void process_netevent (int fd) {
 				case NET_WAIT_ACK:
 					printf ("Reenviando ACK de mi turno por timer\n");
 					enviar_movimiento (fd, ventana);
+					break;
+				case NET_READY:
+					if ((ventana->turno % 2) != ventana->inicio) {
+						//printf ("Enviado un Keep Alive por timer\n");
+						//enviar_keep_alive (fd, ventana);
+					}
 					break;
 			}
 			if (ventana->estado != NET_READY) {

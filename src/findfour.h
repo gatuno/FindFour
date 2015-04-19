@@ -34,7 +34,7 @@
 
 /* Estructuras */
 typedef struct _Juego {
-	int id;
+	uint32_t magic;
 	
 	/* Coordenadas de la ventana */
 	int x, y;
@@ -63,11 +63,11 @@ typedef struct _Juego {
 	Uint32 last_response;
 	int retry;
 	
-	uint8_t ack_turno;
+	int8_t ack_turno;
 	uint8_t ack_columna;
 	uint8_t ack_fila;
 	
-	uint8_t send_turno;
+	int8_t send_turno;
 	uint8_t send_columna;
 	uint8_t send_fila;
 } Juego;

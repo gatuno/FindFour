@@ -63,6 +63,7 @@ typedef struct _FF_TRN_ACK {
 #define FLAG_SYN 0x02
 #define FLAG_TRN 0x04
 #define FLAG_RST 0x08
+#define FLAG_ALV 0x10
 
 /* Estructura para el mensaje de red */
 typedef struct _FF_NET {
@@ -97,11 +98,13 @@ enum {
 	NET_READY,
 	NET_WAIT_ACK,
 	
+	NET_WAIT_KEEP_ALIVE,
+	
 	NUM_NETSTATE
 };
 
 /* Funciones públicas */
-int findfour_netinit (void);
+int findfour_netinit (int);
 
 void process_netevent (int fd);
 
