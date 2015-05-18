@@ -152,7 +152,8 @@ Juego *crear_ventana (void) {
 	start += 20;
 	ventana->x = ventana->y = start;
 	
-	ventana->ack_turno = ventana->send_turno = -1;
+	ventana->seq = ventana->ack = 0;
+	ventana->retry = 0;
 	
 	/* Vaciar el tablero */
 	memset (ventana->tablero, 0, sizeof (int[6][7]));
@@ -228,18 +229,8 @@ int game_loop (void) {
 						/* Crear una nueva ventana y conectar */
 						ventana = crear_ventana ();
 						
-						/* Temporalmente asignar la IP */
-						struct sockaddr_in *bind_addr = (struct sockaddr_in *) &ventana->cliente;
-						
-						bind_addr->sin_family = AF_INET;
-						bind_addr->sin_port = htons (client_port);
-						inet_pton (AF_INET, "127.0.0.1", &bind_addr->sin_addr);
-						
-						ventana->tamsock = sizeof (ventana->cliente);
-						
-						ventana->magic = (RANDOM (65535) << 16) | RANDOM (65535);
-						enviar_syn (fd_sock, ventana, "Gatuno Cliente");
-						ventana->retry = 0;
+						conectar_con (ventana, "Gatuno Cliente", "127.0.0.1", client_port);
+						//ventana->retry = 0;
 						ventana->last_response = SDL_GetTicks ();
 					}
 					break;
@@ -385,11 +376,11 @@ int game_loop (void) {
 									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
 									
 									/* Registrar la última columna y la última fila */
-									ventana->send_turno = ventana->turno++;
+									/*ventana->send_turno = ventana->turno++;
 									ventana->send_columna = h;
-									ventana->send_fila = g;
+									ventana->send_fila = g;*/
 									/* Enviar el turno */
-									enviar_movimiento (fd_sock, ventana);
+									enviar_movimiento (ventana, h, g);
 									ventana->resalte = -1;
 								}
 							}

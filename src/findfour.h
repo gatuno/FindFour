@@ -32,6 +32,14 @@
 
 #define RANDOM(x) ((int) (x ## .0 * rand () / (RAND_MAX + 1.0)))
 
+#ifndef FALSE
+#	define FALSE 0
+#endif
+
+#ifndef TRUE
+#	define TRUE !FALSE
+#endif
+
 /* Estructuras */
 typedef struct _Juego {
 	uint32_t magic;
@@ -60,16 +68,11 @@ typedef struct _Juego {
 	
 	/* Estado del protocolo de red */
 	int estado;
-	Uint32 last_response;
 	int retry;
-	
-	int8_t ack_turno;
-	uint8_t ack_columna;
-	uint8_t ack_fila;
-	
-	int8_t send_turno;
-	uint8_t send_columna;
-	uint8_t send_fila;
+	Uint32 last_response;
+	uint16_t seq, ack;
+	char buffer_send[256];
+	size_t len_send;
 } Juego;
 
 /* Funciones públicas */
