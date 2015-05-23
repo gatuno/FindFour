@@ -68,6 +68,7 @@ int findfour_netinit (int puerto) {
 	/* No utilizaré poll, sino llamadas no-bloqueantes */
 	fcntl (fd_socket, F_SETFL, O_NONBLOCK);
 	
+	/* Ningún error */
 	return 0;
 }
 
@@ -80,18 +81,21 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 		juego->seq = RANDOM (65535);
 	}
 	
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	
 	/* Rellenar los bytes */
-	juego->buffer_send[0] = FLAG_SYN;
+	juego->buffer_send[2] = FLAG_SYN;
 	printf ("Conexión de salida, seq antes: %i\n", juego->seq);
 	temp = htons (juego->seq++);
 	printf ("Conexión de salida, seq después: %i\n", juego->seq);
-	memcpy (&juego->buffer_send[1], &temp, sizeof (temp));
-	temp = 0; /* Ack 0 inicial */
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	juego->buffer_send[5] = 1; /* Versión del protocolo */
-	strncpy (&juego->buffer_send[6], nick, sizeof (char) * NICK_SIZE);
-	juego->buffer_send[5 + NICK_SIZE] = '\0';
-	juego->len_send = 6 + NICK_SIZE;
+	temp = 0; /* Ack 0 inicial */
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	juego->buffer_send[7] = 1; /* Versión del protocolo */
+	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	juego->buffer_send[7 + NICK_SIZE] = '\0';
+	juego->len_send = 8 + NICK_SIZE;
 	
 	/* Para conectar, hay que convertir la ip a sockaddr 
 	 * FIXME: Hacer conversión con GetAddresInfo */
@@ -107,6 +111,7 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	juego->last_response = SDL_GetTicks ();
 	juego->retry = 0;
 	printf ("Envié un SYN inicial. Mi seq: %i\n", juego->seq);
+	juego->estado = NET_SYN_SENT;
 }
 
 void enviar_syn_ack (Juego *juego, FF_NET *recv, const char *nick) {
@@ -119,22 +124,25 @@ void enviar_syn_ack (Juego *juego, FF_NET *recv, const char *nick) {
 		juego->seq = RANDOM (65535);
 	}
 	
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	
 	/* Sortear quién empieza primero */
 	juego->inicio = RANDOM (2);
 	
 	/* Rellenar los bytes */
-	juego->buffer_send[0] = FLAG_SYN | FLAG_ACK;
+	juego->buffer_send[2] = FLAG_SYN | FLAG_ACK;
 	printf ("Enviando SYN + ACK, el seq antes: %i\n", juego->seq);
 	temp = htons (juego->seq++);
 	printf ("Enviando SYN + ACK, el seq después: %i\n", juego->seq);
-	memcpy (&juego->buffer_send[1], &temp, sizeof (temp));
-	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	juego->buffer_send[5] = 1; /* Versión del protocolo */
-	strncpy (&juego->buffer_send[6], nick, sizeof (char) * NICK_SIZE);
-	juego->buffer_send[5 + NICK_SIZE] = '\0';
-	juego->buffer_send[6 + NICK_SIZE] = (juego->inicio == 0 ? 0 : 255);
-	juego->len_send = 7 + NICK_SIZE;
+	temp = htons (juego->ack);
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	juego->buffer_send[7] = 1; /* Versión del protocolo */
+	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	juego->buffer_send[7 + NICK_SIZE] = '\0';
+	juego->buffer_send[8 + NICK_SIZE] = (juego->inicio == 0 ? 0 : 255);
+	juego->len_send = 9 + NICK_SIZE;
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->last_response = SDL_GetTicks ();
@@ -149,14 +157,17 @@ void enviar_ack_0 (Juego *juego, FF_NET *recv) {
 	juego->ack = recv->base.seq + 1;
 	printf ("Enviando ACK, el ack después: %i\n", juego->ack);
 	
-	juego->buffer_send[0] = FLAG_ACK;
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	
+	juego->buffer_send[2] = FLAG_ACK;
 	printf ("Enviando ACK, el seq antes: %i\n", juego->seq);
 	temp = htons (juego->seq++);
 	printf ("Enviando ACK, el seq después: %i\n", juego->seq);
-	memcpy (&juego->buffer_send[1], &temp, sizeof (temp));
-	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	juego->len_send = 5;
+	temp = htons (juego->ack);
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	juego->len_send = 7;
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->last_response = SDL_GetTicks ();
@@ -167,16 +178,19 @@ void enviar_ack_0 (Juego *juego, FF_NET *recv) {
 void enviar_movimiento (Juego *juego, int col, int fila) {
 	uint16_t temp;
 	
-	juego->buffer_send[0] = FLAG_TRN;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[1], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	
-	juego->buffer_send[5] = juego->turno++;
-	juego->buffer_send[6] = col;
-	juego->buffer_send[7] = fila;
-	juego->len_send = 8;
+	juego->buffer_send[2] = FLAG_TRN;
+	temp = htons (juego->seq++);
+	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
+	temp = htons (juego->ack);
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	
+	juego->buffer_send[7] = juego->turno++;
+	juego->buffer_send[8] = col;
+	juego->buffer_send[9] = fila;
+	juego->len_send = 10;
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->last_response = SDL_GetTicks ();
@@ -190,14 +204,17 @@ void enviar_trn_ack (Juego *juego, FF_NET *recv) {
 	
 	juego->ack = recv->base.seq + 1;
 	
-	juego->buffer_send[0] = FLAG_TRN | FLAG_ACK;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[1], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	
-	juego->buffer_send[5] = juego->turno;
-	juego->len_send = 6;
+	juego->buffer_send[2] = FLAG_TRN | FLAG_ACK;
+	temp = htons (juego->seq++);
+	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
+	temp = htons (juego->ack);
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	
+	juego->buffer_send[7] = juego->turno;
+	juego->len_send = 8;
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->last_response = SDL_GetTicks ();
@@ -205,31 +222,48 @@ void enviar_trn_ack (Juego *juego, FF_NET *recv) {
 	printf ("Envié mi confirmación de un movimiento. Turno: %i, mi seq: %i y el ack: %i\n", juego->turno - 1, juego->seq, juego->ack);
 }
 
-void unpack (FF_NET *net, char *buffer, size_t len) {
+int unpack (FF_NET *net, char *buffer, size_t len) {
 	uint16_t temp;
 	memset (net, 0, sizeof (FF_NET));
-	/* Las banderas son uint8, no tienen ningún problema */
-	net->base.flags = buffer[0];
 	
-	memcpy (&temp, &buffer[1], sizeof (temp));
-	net->base.seq = ntohs (temp);
+	/* Mínimo son 7 bytes, firma del protocolo FF y Flags
+	 * Número de secuencia y número de ack */
+	if (len < 3) return -1;
+	
+	if (buffer[0] != 'F' || buffer[1] != 'F') {
+		printf ("Protocol Mismatch. Expecting Find Four (FF)\n");
+		
+		return -1;
+	}
+	
+	/* Las banderas son uint8, no tienen ningún problema */
+	net->base.flags = buffer[2];
+	
 	memcpy (&temp, &buffer[3], sizeof (temp));
+	net->base.seq = ntohs (temp);
+	memcpy (&temp, &buffer[5], sizeof (temp));
 	net->base.ack = ntohs (temp);
 	
 	if (net->base.flags & FLAG_SYN) {
 		/* Contiene el nick y la versión del protocolo */
-		net->syn.version = buffer[5];
-		strncpy (net->syn.nick, &buffer[6], sizeof (char) * NICK_SIZE);
+		printf ("SYN Package len: %i\n", len);
+		net->syn.version = buffer[7];
+		strncpy (net->syn.nick, &buffer[8], sizeof (char) * NICK_SIZE);
 		
 		if (net->base.flags & FLAG_ACK) {
+			printf ("SYN + ACK Package len: %i\n", len);
 			/* Este paquete tiene adicionalmente turno inicial */
-			net->syn_ack.initial = buffer[6 + NICK_SIZE];
+			net->syn_ack.initial = buffer[8 + NICK_SIZE];
 		}
 	} else if (net->base.flags == FLAG_TRN) {
-		net->trn.turno = buffer[5];
-		net->trn.col = buffer[6];
-		net->trn.fila = buffer[7];
+		printf ("TRN Package len: %i\n", len);
+		net->trn.turno = buffer[7];
+		net->trn.col = buffer[8];
+		net->trn.fila = buffer[9];
 	}
+	
+	/* Paquete completo */
+	return 0;
 }
 
 void process_netevent (void) {
@@ -250,7 +284,7 @@ void process_netevent (void) {
 		
 		if (len < 0) break;
 		
-		unpack (&netmsg, buffer, len);
+		if (unpack (&netmsg, buffer, len) < 0) continue;
 		
 		manejado = FALSE;
 		/* Buscar el juego que haga match por el número de ack */
@@ -380,7 +414,20 @@ void process_netevent (void) {
 			continue;
 		}
 		
-		if (now_time > ventana->last_response + NET_TIMER) {
+		if (ventana->estado == NET_READY) {
+			if (ventana->retry == 0 && now_time > ventana->last_response + NET_READY_TIMER) {
+				/* Reenviar mi último paquete para saber si ellos están vivos */
+				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
+				ventana->last_response = SDL_GetTicks ();
+				ventana->retry++;
+			} else if (ventana->retry > 0 && now_time > ventana->last_response + NET_CONN_TIMER) {
+				/* Reenviar de forma más continua */
+				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
+				ventana->last_response = SDL_GetTicks ();
+				ventana->retry++;
+			}
+		} else if (now_time > ventana->last_response + NET_CONN_TIMER) {
+			//printf ("Reenviando por timer: %i\n", ventana->estado);
 			if (ventana->estado == NET_SYN_SENT) {
 				printf ("Reenviando SYN inicial timer\n");
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);

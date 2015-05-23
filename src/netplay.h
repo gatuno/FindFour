@@ -25,7 +25,8 @@
 
 #include "findfour.h"
 
-#define NET_TIMER 1850
+#define NET_CONN_TIMER 1850
+#define NET_READY_TIMER 4950
 
 #define FLAG_ACK 0x01
 #define FLAG_SYN 0x02
