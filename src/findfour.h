@@ -42,8 +42,6 @@
 
 /* Estructuras */
 typedef struct _Juego {
-	uint32_t magic;
-	
 	/* Coordenadas de la ventana */
 	int x, y;
 	int w, h;
@@ -58,6 +56,9 @@ typedef struct _Juego {
 	
 	/* El tablero, 0 = nada, 1 = ficha roja, 2 = ficha azul */
 	int tablero[6][7];
+	
+	/* El botón de cierre */
+	int close_frame; /* ¿El refresh es necesario? */
 	
 	/* La dirección del cliente */
 	struct sockaddr_storage cliente;

@@ -31,7 +31,7 @@
 #define FLAG_ACK 0x01
 #define FLAG_SYN 0x02
 #define FLAG_TRN 0x04
-#define FLAG_RST 0x08
+#define FLAG_FIN 0x08
 #define FLAG_ALV 0x10
 
 typedef struct {
@@ -72,6 +72,13 @@ typedef struct {
 	uint8_t fila;
 } FF_trn;
 
+typedef struct {
+	uint8_t flags;
+	uint16_t seq;
+	uint16_t ack;
+	uint8_t fin;
+} FF_fin;
+
 /* Estructura para el mensaje de red */
 typedef union {
 	FF_netbase base;
@@ -79,6 +86,7 @@ typedef union {
 	FF_syn_ack syn_ack;
 	FF_ack ack;
 	FF_trn trn;
+	FF_fin fin;
 } FF_NET;
 
 /* Los posibles estados en los que se encuentra la partida */
@@ -95,7 +103,20 @@ enum {
 	NET_READY,
 	NET_WAIT_TRN_ACK,
 	
+	/* Conexión que se está cerrando, esperamos por un último FIN + ACK si es que llega */
+	NET_WAIT_CLOSING,
+	
 	NUM_NETSTATE
+};
+
+/* Razones por la cuál desconectar */
+enum {
+	NET_DISCONNECT_NETERROR = 0, /* Demasiados intentos de repetición y no hay respuesta */
+	NET_DISCONNECT_UNKNOWN_START, /* Error al recibir quién empieza */
+	NET_DISCONNECT_WRONG_TURN, /* Número de turno equivocado */
+	NET_DISCONNECT_WRONG_MOV, /* Movimiento equivocado, AKA columna llena */
+	
+	NET_USER_QUIT /* El usuario abandonó la partida */
 };
 
 /* Funciones públicas */
@@ -105,6 +126,7 @@ void process_netevent (void);
 
 void conectar_con (Juego *juego, const char *, const char *, const int);
 void enviar_movimiento (Juego *, int, int);
+void enviar_fin (Juego *, FF_NET *, int);
 
 #endif /* __NETPLAY_H__ */
 

@@ -51,6 +51,8 @@
 #endif
 
 #include "findfour.h"
+#include "netplay.h"
+#include "cp-button.h"
 
 #define FPS (1000/24)
 
@@ -77,6 +79,10 @@ enum {
 	IMG_BIGCOINBLUE,
 	IMG_BIGCOINRED,
 	
+	IMG_BUTTON_CLOSE_UP,
+	IMG_BUTTON_CLOSE_OVER,
+	IMG_BUTTON_CLOSE_DOWN,
+	
 	NUM_IMAGES
 };
 
@@ -89,7 +95,11 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/coinred.png",
 	
 	GAMEDATA_DIR "images/bigcoinblue.png",
-	GAMEDATA_DIR "images/bigcoinred.png"
+	GAMEDATA_DIR "images/bigcoinred.png",
+	
+	GAMEDATA_DIR "images/button-up.png",
+	GAMEDATA_DIR "images/button-over.png",
+	GAMEDATA_DIR "images/button-down.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -110,8 +120,7 @@ SDL_Surface * set_video_mode(unsigned);
 SDL_Surface * screen;
 SDL_Surface * images [NUM_IMAGES];
 
-Juego *primero, *ultimo;
-static int id = 1;
+Juego *primero, *ultimo, *drag;
 const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
 const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 
@@ -127,6 +136,8 @@ int main (int argc, char *argv[]) {
 		client_port = atoi (argv[1]);
 		server_port = atoi (argv[2]);
 	}
+	
+	cp_button_start ();
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
@@ -149,6 +160,7 @@ Juego *crear_ventana (void) {
 	ventana->turno = 0;
 	ventana->inicio = -1;
 	ventana->resalte = -1;
+	ventana->close_frame = IMG_BUTTON_CLOSE_UP;
 	start += 20;
 	ventana->x = ventana->y = start;
 	
@@ -182,6 +194,15 @@ void eliminar_ventana (Juego *juego) {
 		ultimo = juego->prev;
 	}
 	
+	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
+	if (cp_old_map == &(juego->close_frame)) {
+		cp_old_map = NULL;
+	}
+	if (cp_last_button == &(juego->close_frame)) {
+		cp_last_button = NULL;
+	}
+	
+	if (drag == juego) drag = NULL;
 	free (juego);
 }
 
@@ -191,6 +212,7 @@ int game_loop (void) {
 	SDLKey key;
 	Uint32 last_time, now_time;
 	SDL_Rect rect;
+	int *map = NULL;
 	
 	int g, h;
 	int start = 0;
@@ -202,7 +224,7 @@ int game_loop (void) {
 	
 	primero = NULL;
 	ultimo = NULL;
-	Juego *ventana, *drag;
+	Juego *ventana;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
 	
@@ -211,7 +233,7 @@ int game_loop (void) {
 	fd_sock = findfour_netinit (server_port);
 	
 	if (fd_sock < 0) {
-		/* Mostrar ventana de error */
+		/* FIXME: Mostrar ventana de error */
 		
 		return GAME_QUIT;
 	}
@@ -220,7 +242,7 @@ int game_loop (void) {
 		last_time = SDL_GetTicks ();
 		
 		/* Antes de procesar los eventos locales, procesar la red */
-		process_netevent (fd_sock);
+		process_netevent ();
 		
 		while (SDL_PollEvent(&event) > 0) {
 			switch (event.type) {
@@ -230,16 +252,18 @@ int game_loop (void) {
 						ventana = crear_ventana ();
 						
 						conectar_con (ventana, "Gatuno Cliente", "127.0.0.1", client_port);
-						//ventana->retry = 0;
-						ventana->last_response = SDL_GetTicks ();
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
 					/* Primero, analizar si el evento cae dentro de alguna ventana */
 					
 					if (event.button.button != SDL_BUTTON_LEFT) break;
+					map = NULL;
 					manejado = FALSE;
 					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
+						/* No hay eventos para ventanas que se están cerrando */
+						if (ventana->estado == NET_WAIT_CLOSING) continue;
+						
 						x = event.button.x;
 						y = event.button.y;
 						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
@@ -253,6 +277,10 @@ int game_loop (void) {
 								drag_y = y;
 								
 								drag = ventana;
+								manejado = TRUE;
+							} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
+								/* El click cae en el botón de cierre de la ventana */
+								map = &(ventana->close_frame);
 								manejado = TRUE;
 							} else if (y >= 16) {
 								/* El evento cae dentro de la ventana */
@@ -284,8 +312,10 @@ int game_loop (void) {
 						}
 					}
 					
+					cp_button_down (map);
 					break;
 				case SDL_MOUSEMOTION:
+					map = NULL; /* Para los botones de cierre */
 					if (drag != NULL) {
 						/* Mover la ventana a las coordenadas del mouse - los offsets */
 						drag->x = event.motion.x - drag_x;
@@ -298,7 +328,6 @@ int game_loop (void) {
 							y = event.motion.y;
 							ventana->resalte = -1;
 							if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-								manejado = TRUE;
 								x -= ventana->x;
 								y -= ventana->y;
 								
@@ -321,6 +350,14 @@ int game_loop (void) {
 									} else if (x >= 178 && x < 206 && ventana->tablero[0][6] == 0) {
 										ventana->resalte = 6;
 									}
+								/* En caso contrario, buscar si el mouse está en el botón de cierre */
+								} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
+									manejado = TRUE;
+									map = &(ventana->close_frame);
+								}
+								
+								if (y >= 16) {
+									manejado = TRUE;
 								}
 							}
 						}
@@ -332,11 +369,14 @@ int game_loop (void) {
 							ventana = ventana->next;
 						}
 					}
+					
+					cp_button_motion (map);
 					break;
 				case SDL_MOUSEBUTTONUP:
 					drag = NULL;
 					if (event.button.button != SDL_BUTTON_LEFT) break;
 					manejado = FALSE;
+					map = NULL;
 					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
 						x = event.button.x;
 						y = event.button.y;
@@ -384,7 +424,22 @@ int game_loop (void) {
 									ventana->resalte = -1;
 								}
 							}
+							
+							/* Revisar si el evento cae dentro del botón de cierre */
+							if (y >= 26 && y < 54 && x >= 192 && x < 220) {
+								/* El click cae en el botón de cierre de la ventana */
+								map = &(ventana->close_frame);
+								if (cp_button_up (map)) {
+									/* Quitar esta ventana */
+									printf ("Me pidieron quitar esta ventana\n");
+									enviar_fin (ventana, NULL, NET_USER_QUIT);
+								}
+							}
 						}
+					}
+					
+					if (map == NULL) {
+						cp_button_up (NULL);
 					}
 					break;
 				case SDL_QUIT:
@@ -397,13 +452,20 @@ int game_loop (void) {
 		SDL_BlitSurface (images[IMG_LODGE], NULL, screen, NULL);
 		//printf ("Dibujar: \n");
 		for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
-			//printf ("\tVentana con ID: %i\n", ventana->id);
 			rect.x = ventana->x;
 			rect.y = ventana->y;
 			rect.w = ventana->w;
 			rect.h = ventana->h;
 			
 			SDL_BlitSurface (images[IMG_WINDOW], NULL, screen, &rect);
+			
+			/* Dibujar el botón de cierre */
+			rect.x = ventana->x + 192;
+			rect.y = ventana->y + 26;
+			rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
+			rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
+			
+			SDL_BlitSurface (images[ventana->close_frame], NULL, screen, &rect);
 			
 			/* dibujar las fichas antes del tablero */
 			for (g = 0; g < 6; g++) {
