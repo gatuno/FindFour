@@ -35,6 +35,7 @@
 
 #include "findfour.h"
 #include "netplay.h"
+#include "stun.h"
 
 static int fd_socket;
 
@@ -67,6 +68,9 @@ int findfour_netinit (int puerto) {
 	
 	/* No utilizaré poll, sino llamadas no-bloqueantes */
 	fcntl (fd_socket, F_SETFL, O_NONBLOCK);
+	
+	/* Intentar el binding request */
+	try_stun_binding ("stun.ekiga.net", fd_socket);
 	
 	/* Ningún error */
 	return 0;

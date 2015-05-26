@@ -137,6 +137,8 @@ int main (int argc, char *argv[]) {
 		server_port = atoi (argv[2]);
 	}
 	
+	printf ("Puerto cliente: %i, conectar al puerto: %i\n", client_port, server_port);
+	
 	cp_button_start ();
 	do {
 		if (game_loop () == GAME_QUIT) break;
