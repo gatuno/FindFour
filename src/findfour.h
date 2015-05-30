@@ -21,12 +21,7 @@
 #ifndef __FINDFOUR_H__
 #define __FINDFOUR_H__
 
-#include <stdlib.h>
-
-/* Para el manejo de red */
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
+#include <SDL.h>
 
 #define NICK_SIZE 16
 
@@ -40,47 +35,57 @@
 #	define TRUE !FALSE
 #endif
 
-/* Estructuras */
-typedef struct _Juego {
+/* Enumerar las imágenes */
+enum {
+	IMG_LODGE,
+	
+	IMG_WINDOW,
+	
+	IMG_BOARD,
+	IMG_COINBLUE,
+	IMG_COINRED,
+	
+	IMG_BIGCOINBLUE,
+	IMG_BIGCOINRED,
+	
+	IMG_BUTTON_CLOSE_UP,
+	IMG_BUTTON_CLOSE_OVER,
+	IMG_BUTTON_CLOSE_DOWN,
+	
+	NUM_IMAGES
+};
+
+enum {
+	WINDOW_GAME,
+	WINDOW_CHAT,
+	
+	NUM_WINDOWS
+};
+
+typedef struct _Ventana {
+	int tipo;
+	
 	/* Coordenadas de la ventana */
 	int x, y;
 	int w, h;
 	
 	/* Para la lista ligada */
-	struct _Juego *prev, *next;
+	struct _Ventana *prev, *next;
 	
-	/* Quién empieza el juego y el turno actual */
-	int inicio;
-	int turno;
-	int resalte;
+	int mostrar;
 	
-	/* El tablero, 0 = nada, 1 = ficha roja, 2 = ficha azul */
-	int tablero[6][7];
-	
-	/* El botón de cierre */
-	int close_frame; /* ¿El refresh es necesario? */
-	
-	/* La dirección del cliente */
-	struct sockaddr_storage cliente;
-	socklen_t tamsock;
-	
-	/* El nick del otro jugador */
-	char nick[NICK_SIZE];
-	
-	/* Estado del protocolo de red */
-	int estado;
-	int retry;
-	Uint32 last_response;
-	uint16_t seq, ack;
-	char buffer_send[256];
-	size_t len_send;
-} Juego;
+	/* Manejadores de la ventana */
+	int (*mouse_down)(struct _Ventana *, int, int, int **);
+	int (*mouse_motion)(struct _Ventana *, int, int, int **);
+	int (*mouse_up)(struct _Ventana *, int, int);
+	void (*draw)(struct _Ventana *, SDL_Surface *);
+} Ventana;
 
-/* Funciones públicas */
-Juego *crear_ventana (void);
-void eliminar_ventana (Juego *juego);
+extern Ventana *primero, *ultimo;
+extern SDL_Surface * images [NUM_IMAGES];
 
-extern Juego *primero;
+void start_drag (Ventana *v, int offset_x, int offset_y);
+void stop_drag (Ventana *v);
 
 #endif /* __FINDFOUR_H__ */
 

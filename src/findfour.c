@@ -51,6 +51,7 @@
 #endif
 
 #include "findfour.h"
+#include "juego.h"
 #include "netplay.h"
 #include "cp-button.h"
 
@@ -65,26 +66,6 @@
 #ifndef TRUE
 #define TRUE !FALSE
 #endif
-
-/* Enumerar las imágenes */
-enum {
-	IMG_LODGE,
-	
-	IMG_WINDOW,
-	
-	IMG_BOARD,
-	IMG_COINBLUE,
-	IMG_COINRED,
-	
-	IMG_BIGCOINBLUE,
-	IMG_BIGCOINRED,
-	
-	IMG_BUTTON_CLOSE_UP,
-	IMG_BUTTON_CLOSE_OVER,
-	IMG_BUTTON_CLOSE_DOWN,
-	
-	NUM_IMAGES
-};
 
 const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/lodge.png",
@@ -120,9 +101,8 @@ SDL_Surface * set_video_mode(unsigned);
 SDL_Surface * screen;
 SDL_Surface * images [NUM_IMAGES];
 
-Juego *primero, *ultimo, *drag;
-const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
-const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
+Ventana *primero, *ultimo, *drag;
+int drag_x, drag_y;
 
 int client_port, server_port;
 
@@ -148,66 +128,6 @@ int main (int argc, char *argv[]) {
 	return EXIT_SUCCESS;
 }
 
-Juego *crear_ventana (void) {
-	Juego *ventana;
-	static int start = 0;
-	
-	/* Crear una nueva ventana */
-	ventana = (Juego *) malloc (sizeof (Juego));
-	
-	ventana->prev = NULL;
-	ventana->next = primero;
-	ventana->w = 232; /* FIXME: Arreglar esto */
-	ventana->h = 324;
-	ventana->turno = 0;
-	ventana->inicio = -1;
-	ventana->resalte = -1;
-	ventana->close_frame = IMG_BUTTON_CLOSE_UP;
-	start += 20;
-	ventana->x = ventana->y = start;
-	
-	ventana->seq = ventana->ack = 0;
-	ventana->retry = 0;
-	
-	/* Vaciar el tablero */
-	memset (ventana->tablero, 0, sizeof (int[6][7]));
-	
-	if (primero == NULL) {
-		primero = ultimo = ventana;
-	} else {
-		primero->prev = ventana;
-		primero = ventana;
-	}
-	
-	return ventana;
-}
-
-void eliminar_ventana (Juego *juego) {
-	/* Desligar completamente */
-	if (juego->prev != NULL) {
-		juego->prev->next = juego->next;
-	} else {
-		primero = juego->next;
-	}
-	
-	if (juego->next != NULL) {
-		juego->next->prev = juego->prev;
-	} else {
-		ultimo = juego->prev;
-	}
-	
-	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
-	if (cp_old_map == &(juego->close_frame)) {
-		cp_old_map = NULL;
-	}
-	if (cp_last_button == &(juego->close_frame)) {
-		cp_last_button = NULL;
-	}
-	
-	if (drag == juego) drag = NULL;
-	free (juego);
-}
-
 int game_loop (void) {
 	int done = 0;
 	SDL_Event event;
@@ -218,7 +138,7 @@ int game_loop (void) {
 	
 	int g, h;
 	int start = 0;
-	int x, y, drag_x, drag_y;
+	int x, y;
 	int manejado;
 	
 	/* Para la red */
@@ -226,7 +146,7 @@ int game_loop (void) {
 	
 	primero = NULL;
 	ultimo = NULL;
-	Juego *ventana;
+	Ventana *ventana;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
 	
@@ -251,9 +171,9 @@ int game_loop (void) {
 				case SDL_KEYDOWN:
 					if (event.key.keysym.sym == SDLK_n) {
 						/* Crear una nueva ventana y conectar */
-						ventana = crear_ventana ();
+						ventana = (Ventana *) crear_juego ();
 						
-						conectar_con (ventana, "Gatuno Cliente", "127.0.0.1", client_port);
+						conectar_con ((Juego *) ventana, "Gatuno Cliente", "127.0.0.1", client_port);
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
@@ -262,31 +182,18 @@ int game_loop (void) {
 					if (event.button.button != SDL_BUTTON_LEFT) break;
 					map = NULL;
 					manejado = FALSE;
+					x = event.button.x;
+					y = event.button.y;
+					
 					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
 						/* No hay eventos para ventanas que se están cerrando */
-						if (ventana->estado == NET_WAIT_CLOSING) continue;
+						if (!ventana->mostrar) continue;
 						
-						x = event.button.x;
-						y = event.button.y;
+						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-							x -= ventana->x;
-							y -= ventana->y;
-							
-							if (x >= 64 && x < 168 && y < 22) {
-								//printf ("Click por el agarre\n");
-								/* Click por el agarre */
-								drag_x = x;
-								drag_y = y;
-								
-								drag = ventana;
-								manejado = TRUE;
-							} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
-								/* El click cae en el botón de cierre de la ventana */
-								map = &(ventana->close_frame);
-								manejado = TRUE;
-							} else if (y >= 16) {
-								/* El evento cae dentro de la ventana */
-								manejado = TRUE;
+							/* Pasarlo al manejador de la ventana */
+							if (ventana->mouse_down != NULL) {
+								manejado = ventana->mouse_down (ventana, x - ventana->x, y - ventana->y, &map);
 							}
 							
 							if (manejado && primero != ventana) {
@@ -325,48 +232,23 @@ int game_loop (void) {
 					} else {
 						/* En caso contrario, buscar por un evento de ficha de turno */
 						manejado = FALSE;
+						
+						x = event.motion.x;
+						y = event.motion.y;
 						for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
-							x = event.motion.x;
-							y = event.motion.y;
-							ventana->resalte = -1;
+							/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 							if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-								x -= ventana->x;
-								y -= ventana->y;
-								
-								/* Si es nuestro turno, hacer resalte */
-								if (y > 65 && y < 217 && x > 26 && x < 208 && (ventana->turno % 2) == ventana->inicio) {
-									/* Está dentro del tablero */
-									if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
-										/* Primer fila de resalte */
-										ventana->resalte = 0;
-									} else if (x >= 56 && x < 81 && ventana->tablero[0][1] == 0) {
-										ventana->resalte = 1;
-									} else if (x >= 81 && x < 105 && ventana->tablero[0][2] == 0) {
-										ventana->resalte = 2;
-									} else if (x >= 105 && x < 129 && ventana->tablero[0][3] == 0) {
-										ventana->resalte = 3;
-									} else if (x >= 129 && x < 153 && ventana->tablero[0][4] == 0) {
-										ventana->resalte = 4;
-									} else if (x >= 153 && x < 178 && ventana->tablero[0][5] == 0) {
-										ventana->resalte = 5;
-									} else if (x >= 178 && x < 206 && ventana->tablero[0][6] == 0) {
-										ventana->resalte = 6;
-									}
-								/* En caso contrario, buscar si el mouse está en el botón de cierre */
-								} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
-									manejado = TRUE;
-									map = &(ventana->close_frame);
-								}
-								
-								if (y >= 16) {
-									manejado = TRUE;
+								if (ventana->mouse_motion != NULL) {
+									manejado = ventana->mouse_motion (ventana, x - ventana->x, y - ventana->y, &map);
 								}
 							}
 						}
 						
-						/* Recorrer las ventanas restantes y quitarles el resaltado */
+						/* Recorrer las ventanas restantes y mandarles un evento mouse motion nulo */
 						while (ventana != NULL) {
-							ventana->resalte = -1;
+							if (ventana->mouse_motion != NULL) {
+								manejado = ventana->mouse_motion (ventana, -1, -1, NULL);
+							}
 							
 							ventana = ventana->next;
 						}
@@ -375,67 +257,17 @@ int game_loop (void) {
 					cp_button_motion (map);
 					break;
 				case SDL_MOUSEBUTTONUP:
-					drag = NULL;
 					if (event.button.button != SDL_BUTTON_LEFT) break;
+					drag = NULL;
 					manejado = FALSE;
 					map = NULL;
+					x = event.button.x;
+					y = event.button.y;
 					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
-						x = event.button.x;
-						y = event.button.y;
+						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-							x -= ventana->x;
-							y -= ventana->y;
-							
-							if ((y >= 16) || (x >= 64 && x < 168 && y < 22)) {
-								/* El evento cae dentro de la ventana */
-								manejado = TRUE;
-							}
-							if (y > 65 && y < 217 && x > 26 && x < 208 && (ventana->turno % 2) == ventana->inicio) {
-								/* Está dentro del tablero */
-								h = -1;
-								if (x >= 32 && x < 56 && ventana->tablero[0][0] == 0) {
-									/* Primer fila de resalte */
-									h = 0;
-								} else if (x >= 56 && x < 81 && ventana->tablero[0][1] == 0) {
-									h = 1;
-								} else if (x >= 81 && x < 105 && ventana->tablero[0][2] == 0) {
-									h = 2;
-								} else if (x >= 105 && x < 129 && ventana->tablero[0][3] == 0) {
-									h = 3;
-								} else if (x >= 129 && x < 153 && ventana->tablero[0][4] == 0) {
-									h = 4;
-								} else if (x >= 153 && x < 178 && ventana->tablero[0][5] == 0) {
-									h = 5;
-								} else if (x >= 178 && x < 206 && ventana->tablero[0][6] == 0) {
-									h = 6;
-								}
-								
-								if (h >= 0) {
-									g = 5;
-									while (g > 0 && ventana->tablero[g][h] != 0) g--;
-									
-									/* Poner la ficha en la posición [g][h] y avanzar turno */
-									ventana->tablero[g][h] = (ventana->turno % 2) + 1;
-									
-									/* Registrar la última columna y la última fila */
-									/*ventana->send_turno = ventana->turno++;
-									ventana->send_columna = h;
-									ventana->send_fila = g;*/
-									/* Enviar el turno */
-									enviar_movimiento (ventana, h, g);
-									ventana->resalte = -1;
-								}
-							}
-							
-							/* Revisar si el evento cae dentro del botón de cierre */
-							if (y >= 26 && y < 54 && x >= 192 && x < 220) {
-								/* El click cae en el botón de cierre de la ventana */
-								map = &(ventana->close_frame);
-								if (cp_button_up (map)) {
-									/* Quitar esta ventana */
-									printf ("Me pidieron quitar esta ventana\n");
-									enviar_fin (ventana, NULL, NET_USER_QUIT);
-								}
+							if (ventana->mouse_up != NULL) {
+								manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y);
 							}
 						}
 					}
@@ -454,82 +286,9 @@ int game_loop (void) {
 		SDL_BlitSurface (images[IMG_LODGE], NULL, screen, NULL);
 		//printf ("Dibujar: \n");
 		for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
-			rect.x = ventana->x;
-			rect.y = ventana->y;
-			rect.w = ventana->w;
-			rect.h = ventana->h;
+			if (!ventana->mostrar) continue;
 			
-			SDL_BlitSurface (images[IMG_WINDOW], NULL, screen, &rect);
-			
-			/* Dibujar el botón de cierre */
-			rect.x = ventana->x + 192;
-			rect.y = ventana->y + 26;
-			rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
-			rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
-			
-			SDL_BlitSurface (images[ventana->close_frame], NULL, screen, &rect);
-			
-			/* dibujar las fichas antes del tablero */
-			for (g = 0; g < 6; g++) {
-				for (h = 0; h < 7; h++) {
-					if (ventana->tablero[g][h] == 0) continue;
-					rect.x = ventana->x + tablero_cols[h];
-					rect.y = ventana->y + tablero_filas[g];
-					
-					rect.w = images[IMG_COINBLUE]->w;
-					rect.h = images[IMG_COINBLUE]->h;
-					
-					if (ventana->tablero[g][h] == 1) {
-						SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
-					} else {
-						SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
-					}
-				}
-			}
-			
-			rect.x = ventana->x + 26;
-			rect.y = ventana->y + 65;
-			rect.w = images[IMG_BOARD]->w;
-			rect.h = images[IMG_BOARD]->h;
-			
-			SDL_BlitSurface (images[IMG_BOARD], NULL, screen, &rect);
-			
-			if (ventana->resalte >= 0) {
-				/* Dibujar la ficha resalta en la columna correspondiente */
-				rect.x = ventana->x;
-				rect.y = ventana->y + 46;
-				switch (ventana->resalte) {
-					case 0:
-						rect.x += 30;
-						break;
-					case 1:
-						rect.x += 53;
-						break;
-					case 2:
-						rect.x += 79;
-						break;
-					case 3:
-						rect.x += 102;
-						break;
-					case 4:
-						rect.x += 126;
-						break;
-					case 5:
-						rect.x += 150;
-						break;
-					case 6:
-						rect.x += 175;
-						break;
-				}
-				rect.w = images[IMG_BIGCOINRED]->w;
-				rect.h = images[IMG_BIGCOINRED]->h;
-				//printf ("Para hacer el resalte, turno: %i, Inicio: %i, Turno %% 2: %i\n", ventana->turno, ventana->inicio, (ventana->turno %2));
-				if (ventana->turno % 2 == 0) { /* El que empieza siempre es rojo */
-					SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
-				} else {
-					SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
-				}
-			}
+			ventana->draw (ventana, screen);
 		}
 		
 		SDL_Flip (screen);
@@ -540,6 +299,18 @@ int game_loop (void) {
 	} while (!done);
 	
 	return done;
+}
+
+void start_drag (Ventana *v, int offset_x, int offset_y) {
+	/* Cuando una ventana determina que se va a mover, guardamos su offset para un arrastre perfecto */
+	drag_x = offset_x;
+	drag_y = offset_y;
+	
+	drag = v;
+}
+
+void stop_drag (Ventana *v) {
+	if (drag == v) drag = NULL;
 }
 
 /* Set video mode: */

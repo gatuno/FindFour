@@ -127,7 +127,7 @@ void try_stun_binding (const char *server, int fd_socket) {
 		return;
 	}
 	
-	build_binding_request (&stun_msg, 1, 1, 0x0c);
+	build_binding_request (&stun_msg, 0, 0, 0x0c);
 	
 	len_msg = encode_stun_message (&stun_msg, buffer, sizeof (buffer));
 	

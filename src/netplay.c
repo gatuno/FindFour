@@ -34,6 +34,7 @@
 #include <SDL.h>
 
 #include "findfour.h"
+#include "juego.h"
 #include "netplay.h"
 #include "stun.h"
 
@@ -286,7 +287,10 @@ void enviar_fin (Juego *juego, FF_NET *recv, int razon) {
 	juego->estado = NET_WAIT_CLOSING;
 	juego->last_response = SDL_GetTicks ();
 	juego->retry = 0;
-	printf ("Envié un Keep Alive ACK, sigo vivo. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
+	printf ("Envié un FIN. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
+	
+	/* Ocultar la ventan */
+	juego->ventana.mostrar = FALSE;
 }
 
 void enviar_fin_ack (Juego *juego, FF_NET *recv) {
@@ -380,32 +384,42 @@ void process_netevent (void) {
 		
 		manejado = FALSE;
 		/* Buscar el juego que haga match por el número de ack */
-		ventana = primero;
+		ventana = (Juego *) primero;
 		while (ventana != NULL) {
+			/* Omitir esta ventana porque no es de tipo juego */
+			if (ventana->ventana.tipo != WINDOW_GAME) {
+				ventana = (Juego *) ventana->ventana.next;
+				continue;
+			}
 			if (netmsg.base.ack == ventana->seq) {
 				manejado = TRUE;
 				/* Coincide por número de secuencia */
 				if (netmsg.base.flags == FLAG_FIN) {
 					/* Un fin en cualquier momento es fin */
 					enviar_fin_ack (ventana, &netmsg);
-					next = ventana->next;
-					eliminar_ventana (ventana);
+					next = (Juego *) ventana->ventana.next;
+					eliminar_juego (ventana);
 					ventana = next;
 					continue;
 				} else if (ventana->estado == NET_SYN_SENT && netmsg.base.flags == (FLAG_SYN | FLAG_ACK)) {
-					/* Enviar el ack 0 */
-					enviar_ack_0 (ventana, &netmsg);
-					if (netmsg.syn_ack.initial == 0) {
-						printf ("Ellos inician primero\n");
-						ventana->inicio = 1;
-					} else if (netmsg.syn_ack.initial == 255) {
-						printf ("Nosotros empezamos\n");
-						ventana->inicio = 0;
-					} else {
+					
+					/* Revisar quién empieza */
+					if (netmsg.syn_ack.initial != 0 && netmsg.syn_ack.initial != 255) {
 						printf ("No sabemos quién empieza, esto es un problema\n");
+						enviar_fin (ventana, &netmsg, NET_DISCONNECT_UNKNOWN_START);
+					} else {
+						/* Enviar el ack 0 sólo si el turno inicial es válido */
+						enviar_ack_0 (ventana, &netmsg);
+						if (netmsg.syn_ack.initial == 0) {
+							printf ("Ellos inician primero\n");
+							ventana->inicio = 1;
+						} else if (netmsg.syn_ack.initial == 255) {
+							printf ("Nosotros empezamos\n");
+							ventana->inicio = 0;
+						}
+						ventana->estado = NET_READY;
+						printf ("Listo para jugar, envié mi último ack\n");
 					}
-					ventana->estado = NET_READY;
-					printf ("Listo para jugar, envié mi último ack\n");
 				} else if (ventana->estado == NET_SYN_RECV && netmsg.base.flags == FLAG_ACK) {
 					printf ("Listo para jugar\n");
 					ventana->estado = NET_READY;
@@ -495,8 +509,8 @@ void process_netevent (void) {
 					printf ("Recibí un keep alive, respondí con un Keep alive ACK\n");
 				} else if (ventana->estado == NET_WAIT_CLOSING && netmsg.base.flags == (FLAG_FIN | FLAG_ACK)) {
 					/* El ACK para nuestro FIN, ya cerramos y bye */
-					next = ventana->next;
-					eliminar_ventana (ventana);
+					next = (Juego *) ventana->ventana.next;
+					eliminar_juego (ventana);
 					ventana = next;
 					continue;
 					printf ("Recibí un FIN + ACK, esto está totalmente cerrado\n");
@@ -509,14 +523,14 @@ void process_netevent (void) {
 				printf ("Una repetición de paquete, responderemos con el último paquete que nosotros enviamos\n");
 			}
 			
-			ventana = ventana->next;
+			ventana = (Juego *) ventana->ventana.next;
 		}
 		
 		if (!manejado) {
 			if (netmsg.base.flags == FLAG_SYN) {
 				/* Conexión inicial entrante */
 				printf ("Nueva conexión entrante\n");
-				ventana = crear_ventana ();
+				ventana = crear_juego ();
 			
 				/* Copiar la dirección IP del cliente */
 				memcpy (&ventana->cliente, &cliente, tamsock);
@@ -532,15 +546,20 @@ void process_netevent (void) {
 	
 	/* Después de procesar los eventos de entrada,
 	 * revisar los timers, para reenviar eventos */
-	ventana = primero;
+	ventana = (Juego *) primero;
 	now_time = SDL_GetTicks();
 	
 	while (ventana != NULL) {
+		/* Omitir esta ventana porque no es de tipo juego */
+		if (ventana->ventana.tipo != WINDOW_GAME) {
+			ventana = (Juego *) ventana->ventana.next;
+			continue;
+		}
 		if (ventana->retry >= 5) {
 			if (ventana->estado == NET_WAIT_CLOSING) {
 				/* Demasiados intentos */
-				next = ventana->next;
-				eliminar_ventana (ventana);
+				next = (Juego *) ventana->ventana.next;
+				eliminar_juego (ventana);
 				ventana = next;
 			} else {
 				/* Intentar enviar un último mensaje de FIN */
@@ -585,6 +604,6 @@ void process_netevent (void) {
 			}
 		}
 		
-		ventana = ventana->next;
+		ventana = (Juego *) ventana->ventana.next;
 	}
 }
