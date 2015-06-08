@@ -54,6 +54,7 @@
 #include "juego.h"
 #include "netplay.h"
 #include "cp-button.h"
+#include "chat.h"
 
 #define FPS (1000/24)
 
@@ -78,9 +79,29 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/bigcoinblue.png",
 	GAMEDATA_DIR "images/bigcoinred.png",
 	
+	GAMEDATA_DIR "images/ventana-chat.png",
+	
+	GAMEDATA_DIR "images/shadow-up.png",
+	GAMEDATA_DIR "images/shadow-over.png",
+	GAMEDATA_DIR "images/shadow-down.png",
+	
 	GAMEDATA_DIR "images/button-up.png",
 	GAMEDATA_DIR "images/button-over.png",
-	GAMEDATA_DIR "images/button-down.png"
+	GAMEDATA_DIR "images/button-down.png",
+	
+	GAMEDATA_DIR "images/button-arrow-1-up.png",
+	GAMEDATA_DIR "images/button-arrow-1-over.png",
+	GAMEDATA_DIR "images/button-arrow-1-down.png",
+	
+	GAMEDATA_DIR "images/button-arrow-2-up.png",
+	GAMEDATA_DIR "images/button-arrow-2-over.png",
+	GAMEDATA_DIR "images/button-arrow-2-down.png",
+	
+	GAMEDATA_DIR "images/button-list-up.png",
+	GAMEDATA_DIR "images/button-list-over.png",
+	GAMEDATA_DIR "images/button-list-down.png",
+	
+	GAMEDATA_DIR "images/list-mini.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -135,6 +156,7 @@ int game_loop (void) {
 	Uint32 last_time, now_time;
 	SDL_Rect rect;
 	int *map = NULL;
+	Chat *chat;
 	
 	int g, h;
 	int start = 0;
@@ -160,6 +182,8 @@ int game_loop (void) {
 		return GAME_QUIT;
 	}
 	
+	chat = inicializar_chat ();
+	
 	do {
 		last_time = SDL_GetTicks ();
 		
@@ -174,6 +198,8 @@ int game_loop (void) {
 						ventana = (Ventana *) crear_juego ();
 						
 						conectar_con ((Juego *) ventana, "Gatuno Cliente", "127.0.0.1", client_port);
+					} else if (event.key.keysym.sym == SDLK_c) {
+						chat->ventana.mostrar = TRUE;
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
@@ -267,7 +293,7 @@ int game_loop (void) {
 						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 							if (ventana->mouse_up != NULL) {
-								manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y);
+								manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y, &map);
 							}
 						}
 					}

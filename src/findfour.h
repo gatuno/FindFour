@@ -48,9 +48,29 @@ enum {
 	IMG_BIGCOINBLUE,
 	IMG_BIGCOINRED,
 	
+	IMG_WINDOW_CHAT,
+	
+	IMG_SHADOW_UP,
+	IMG_SHADOW_OVER,
+	IMG_SHADOW_DOWN,
+	
 	IMG_BUTTON_CLOSE_UP,
 	IMG_BUTTON_CLOSE_OVER,
 	IMG_BUTTON_CLOSE_DOWN,
+	
+	IMG_BUTTON_ARROW_1_UP,
+	IMG_BUTTON_ARROW_1_OVER,
+	IMG_BUTTON_ARROW_1_DOWN,
+	
+	IMG_BUTTON_ARROW_2_UP,
+	IMG_BUTTON_ARROW_2_OVER,
+	IMG_BUTTON_ARROW_2_DOWN,
+	
+	IMG_BUTTON_LIST_UP,
+	IMG_BUTTON_LIST_OVER,
+	IMG_BUTTON_LIST_DOWN,
+	
+	IMG_LIST_MINI,
 	
 	NUM_IMAGES
 };
@@ -77,7 +97,7 @@ typedef struct _Ventana {
 	/* Manejadores de la ventana */
 	int (*mouse_down)(struct _Ventana *, int, int, int **);
 	int (*mouse_motion)(struct _Ventana *, int, int, int **);
-	int (*mouse_up)(struct _Ventana *, int, int);
+	int (*mouse_up)(struct _Ventana *, int, int, int **);
 	void (*draw)(struct _Ventana *, SDL_Surface *);
 } Ventana;
 

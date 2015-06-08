@@ -1,0 +1,280 @@
+/*
+ * chat.c
+ * This file is part of Find Four
+ *
+ * Copyright (C) 2015 - Félix Arreola Rodríguez
+ *
+ * Find Four is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Find Four is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Find Four. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <stdlib.h>
+#include <SDL.h>
+
+#include "chat.h"
+#include "cp-button.h"
+
+int chat_mouse_down (Chat *j, int x, int y, int **button_map);
+int chat_mouse_motion (Chat *j, int x, int y, int **button_map);
+int chat_mouse_up (Chat *j, int x, int y, int **button_map);
+void chat_draw (Chat *j, SDL_Surface *screen);
+
+Uint32 azul1 = 0;
+
+Chat *inicializar_chat (void) {
+	Chat *c;
+	int g;
+	
+	c = (Chat *) malloc (sizeof (Chat));
+	
+	c->ventana.w = 232; /* FIXME: Arreglar esto */
+	c->ventana.h = 324;
+	c->ventana.x = c->ventana.y = 0;
+	
+	c->ventana.tipo = WINDOW_CHAT;
+	c->ventana.mostrar = TRUE;
+	
+	c->ventana.mouse_down = chat_mouse_down;
+	c->ventana.mouse_motion = chat_mouse_motion;
+	c->ventana.mouse_up = chat_mouse_up;
+	c->ventana.draw = chat_draw;
+	
+	c->close_frame = IMG_BUTTON_CLOSE_UP;
+	c->up_frame = IMG_BUTTON_ARROW_1_UP;
+	c->down_frame = IMG_BUTTON_ARROW_2_UP;
+	c->broadcast_list_frame = IMG_BUTTON_LIST_UP;
+	
+	for (g = 0; g < 8; g++) {
+		c->buddys[g] = IMG_SHADOW_UP;
+	}
+	
+	c->ventana.prev = NULL;
+	c->ventana.next = primero;
+	
+	if (primero == NULL) {
+		primero = ultimo = (Ventana *) c;
+	} else {
+		primero->prev = (Ventana *) c;
+		primero = (Ventana *) c;
+	}
+	
+	return c;
+}
+
+int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
+	int g;
+	if (c->ventana.mostrar == FALSE) return FALSE;
+	
+	if (x >= 64 && x < 168 && y < 22) {
+		/* Click por el agarre */
+		start_drag ((Ventana *) c, x, y);
+		return TRUE;
+	}
+	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
+		/* El click cae en el botón de cierre de la ventana */
+		*button_map = &(c->close_frame);
+		return TRUE;
+	}
+	if (x >= 190 && x < 218 && y >= 61 && y < 89) {
+		*button_map = &(c->up_frame);
+		return TRUE;
+	}
+	if (x >= 190 && x < 218 && y >= 245 && y < 273) {
+		*button_map = &(c->down_frame);
+		return TRUE;
+	}
+	if (x >= 102 && x < 130 && y >= 275 && y < 303){
+		*button_map = &(c->broadcast_list_frame);
+		return TRUE;
+	}
+	/* Los 8 buddys */
+	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+		g = (y - 65);
+		if ((g % 26) < 25) {
+			g = g / 26;
+			*button_map = &(c->buddys[g]);
+		}
+	}
+	if (y >= 16) {
+		/* El evento cae dentro de la ventana */
+		return TRUE;
+	}
+	
+	return FALSE;
+}
+
+int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
+	int g;
+	if (c->ventana.mostrar == FALSE) return FALSE;
+	
+	/* En caso contrario, buscar si el mouse está en el botón de cierre */
+	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
+		*button_map = &(c->close_frame);
+		return TRUE;
+	}
+	if (x >= 190 && x < 218 && y >= 61 && y < 89) {
+		*button_map = &(c->up_frame);
+		return TRUE;
+	}
+	if (x >= 190 && x < 218 && y >= 245 && y < 273) {
+		*button_map = &(c->down_frame);
+		return TRUE;
+	}
+	if (x >= 102 && x < 130 && y >= 275 && y < 303){
+		*button_map = &(c->broadcast_list_frame);
+		return TRUE;
+	}
+	/* Los 8 buddys */
+	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+		g = (y - 65);
+		if ((g % 26) < 25) {
+			g = g / 26;
+			*button_map = &(c->buddys[g]);
+		}
+	}
+	if ((y >= 16) || (x >= 64 && x < 168)) {
+		/* El evento cae dentro de la ventana */
+		return TRUE;
+	}
+	return FALSE;
+}
+
+int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
+	int g;
+	if (c->ventana.mostrar == FALSE) return FALSE;
+	
+	/* En caso contrario, buscar si el mouse está en el botón de cierre */
+	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
+		*button_map = &(c->close_frame);
+		if (cp_button_up (*button_map)) {
+			c->ventana.mostrar = FALSE;
+		}
+		return TRUE;
+	}
+	
+	/* Botón flecha hacia arriba */
+	if (x >= 190 && x < 218 && y >= 61 && y < 89) {
+		*button_map = &(c->up_frame);
+		if (cp_button_up (*button_map)) {
+			/* No hacer nada, por el momento */
+		}
+		return TRUE;
+	}
+	/* Botón flecha hacia abajo */
+	if (x >= 190 && x < 218 && y >= 245 && y < 273) {
+		*button_map = &(c->down_frame);
+		if (cp_button_up (*button_map)) {
+			/* No hacer nada, por el momento */
+		}
+		return TRUE;
+	}
+	
+	/* Buddy list broadcast local */
+	if (x >= 102 && x < 130 && y >= 275 && y < 303){
+		*button_map = &(c->broadcast_list_frame);
+		if (cp_button_up (*button_map)) {
+			/* No hacer nada, por el momento */
+		}
+		return TRUE;
+	}
+	/* Los 8 buddys */
+	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+		g = (y - 65);
+		if ((g % 26) < 25) {
+			g = g / 26;
+			*button_map = &(c->buddys[g]);
+			if (cp_button_up (*button_map)) {
+				/* Click a un buddy */
+			}
+		}
+	}
+	if ((y >= 16) || (x >= 64 && x < 168)) {
+		/* El evento cae dentro de la ventana */
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void chat_draw (Chat *c, SDL_Surface *screen) {
+	SDL_Rect rect;
+	int g;
+	
+	if (azul1 == 0) {
+		azul1 = SDL_MapRGB (screen->format, 0, 0x52, 0x9B);
+	}
+	
+	rect.x = c->ventana.x;
+	rect.y = c->ventana.y;
+	rect.w = c->ventana.w;
+	rect.h = c->ventana.h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW_CHAT], NULL, screen, &rect);
+	
+	/* Dibujar el botón de cierre */
+	rect.x = c->ventana.x + 190;
+	rect.y = c->ventana.y + 30;
+	rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
+	rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
+	
+	SDL_BlitSurface (images[c->close_frame], NULL, screen, &rect);
+	
+	/* Dibujar el color azul de la barra de desplazamiento */
+	rect.x = c->ventana.x + 191;
+	rect.y = c->ventana.y + 73;
+	rect.w = 26;
+	rect.h = 188;
+	
+	SDL_FillRect (screen, &rect, azul1);
+	
+	/* Botón hacia arriba */
+	rect.x = c->ventana.x + 190;
+	rect.y = c->ventana.y + 61;
+	rect.w = images[IMG_BUTTON_ARROW_1_UP]->w;
+	rect.h = images[IMG_BUTTON_ARROW_1_UP]->h;
+	
+	SDL_BlitSurface (images[c->up_frame], NULL, screen, &rect);
+	
+	/* Botón hacia abajo */
+	rect.x = c->ventana.x + 190;
+	rect.y = c->ventana.y + 245;
+	rect.w = images[IMG_BUTTON_ARROW_2_UP]->w;
+	rect.h = images[IMG_BUTTON_ARROW_2_UP]->h;
+	
+	SDL_BlitSurface (images[c->down_frame], NULL, screen, &rect);
+	
+	/* Broadcast list */
+	rect.x = c->ventana.x + 102;
+	rect.y = c->ventana.y + 275;
+	rect.w = images[IMG_BUTTON_LIST_UP]->w;
+	rect.h = images[IMG_BUTTON_LIST_UP]->h;
+	
+	SDL_BlitSurface (images[c->broadcast_list_frame], NULL, screen, &rect);
+	
+	rect.x = c->ventana.x + 109;
+	rect.y = c->ventana.y + 281;
+	rect.w = images[IMG_LIST_MINI]->w;
+	rect.h = images[IMG_LIST_MINI]->h;
+	
+	SDL_BlitSurface (images[IMG_LIST_MINI], NULL, screen, &rect);
+	
+	/* Los 8 buddys */
+	for (g = 0; g < 8; g++) {
+		rect.x = c->ventana.x + 18;
+		rect.y = c->ventana.y + 65 + (g * 26);
+		rect.w = images[IMG_SHADOW_UP]->w;
+		rect.h = images[IMG_SHADOW_UP]->h;
+		
+		SDL_BlitSurface (images[c->buddys[g]], NULL, screen, &rect);
+	}
+}
+

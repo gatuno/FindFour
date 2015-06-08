@@ -30,7 +30,7 @@
 
 int juego_mouse_down (Juego *j, int x, int y, int **button_map);
 int juego_mouse_motion (Juego *j, int x, int y, int **button_map);
-int juego_mouse_up (Juego *j, int x, int y);
+int juego_mouse_up (Juego *j, int x, int y, int **button_map);
 void juego_draw (Juego *j, SDL_Surface *screen);
 
 /* Algunas constantes */
@@ -108,6 +108,7 @@ void eliminar_juego (Juego *j) {
 }
 
 int juego_mouse_down (Juego *j, int x, int y, int **button_map) {
+	if (j->ventana.mostrar == FALSE) return FALSE;
 	if (x >= 64 && x < 168 && y < 22) {
 		/* Click por el agarre */
 		start_drag ((Ventana *) j, x, y);
@@ -125,6 +126,7 @@ int juego_mouse_down (Juego *j, int x, int y, int **button_map) {
 }
 
 int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
+	if (j->ventana.mostrar == FALSE) return FALSE;
 	/* Primero, quitar el resalte */
 	j->resalte = -1;
 	
@@ -148,24 +150,25 @@ int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
 			j->resalte = 6;
 		}
 	}
+	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		*button_map = &(j->close_frame);
 		return TRUE;
 	}
-	if (x >= 64 && x < 168 && y < 22) {
-		return TRUE;
-	}
-	if (y >= 16) {
+	if ((y >= 16) || (x >= 64 && x < 168)) {
+		/* El evento cae dentro de la ventana */
 		return TRUE;
 	}
 	
 	return FALSE;
 }
 
-int juego_mouse_up (Juego *j, int x, int y) {
+int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	int g, h;
-	int *map;
+	
+	if (j->ventana.mostrar == FALSE) return FALSE;
+	
 	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio) {
 		/* Está dentro del tablero */
 		h = -1;
@@ -202,15 +205,15 @@ int juego_mouse_up (Juego *j, int x, int y) {
 	/* Revisar si el evento cae dentro del botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
-		map = &(j->close_frame);
-		if (cp_button_up (map)) {
+		*button_map = &(j->close_frame);
+		if (cp_button_up (*button_map)) {
 			/* Quitar esta ventana */
 			printf ("Me pidieron quitar esta ventana\n");
 			enviar_fin (j, NULL, NET_USER_QUIT);
 		}
 	}
 	
-	if ((y >= 16) || (x >= 64 && x < 168 && y < 22)) {
+	if ((y >= 16) || (x >= 64 && x < 168)) {
 		/* El evento cae dentro de la ventana */
 		return TRUE;
 	}

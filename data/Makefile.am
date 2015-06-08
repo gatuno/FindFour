@@ -9,5 +9,18 @@ nobase_dist_gamedata_DATA = images/lodge.png \
 	images/bigcoinblue.png \
 	images/button-up.png \
 	images/button-over.png \
-	images/button-down.png
-
+	images/button-down.png \
+	images/button-arrow-1-down.png \
+	images/button-arrow-1-over.png \
+	images/button-arrow-1-up.png \
+	images/button-arrow-2-down.png \
+	images/button-arrow-2-over.png \
+	images/button-arrow-2-up.png \
+	images/button-list-down.png \
+	images/button-list-over.png \
+	images/button-list-up.png \
+	images/shadow-down.png \
+	images/shadow-over.png \
+	images/shadow-up.png \
+	images/ventana-chat.png \
+	images/list-mini.png
