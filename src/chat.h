@@ -21,9 +21,30 @@
 #ifndef __CHAT_H__
 #define __CHAT_H__
 
+/* Para el manejo de red */
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+
 #include "findfour.h"
 
+enum {
+	CHAT_LIST_MCAST = 0,
+	
+	NUM_CHAT_LIST
+};
+
 /* Estructuras */
+typedef struct _BuddyMCast {
+	struct _BuddyMCast *next;
+	
+	char nick[NICK_SIZE];
+	
+	/* La dirección del cliente */
+	struct sockaddr_storage cliente;
+	socklen_t tamsock;
+} BuddyMCast;
+
 typedef struct _Chat {
 	Ventana ventana;
 	
@@ -36,11 +57,20 @@ typedef struct _Chat {
 	/* El botón de buddy locales */
 	int broadcast_list_frame;
 	
-	/* Los 8 buddys */
+	/* Los 8 buddys buttons */
 	int buddys[8];
+	
+	int list_display;
+	int list_offset;
+	
+	/* Los buddys encontrados por red */
+	BuddyMCast *buddy_mcast;
+	int buddy_mcast_count;
 } Chat;
 
-Chat *inicializar_chat (void);
+void inicializar_chat (void);
+void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock);
+void show_chat (void);
 
 #endif /* __CHAT_H__ */
 

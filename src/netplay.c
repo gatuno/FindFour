@@ -38,13 +38,26 @@
 #include "netplay.h"
 #include "stun.h"
 
+#define MULTICAST_IPV4_GROUP "224.0.0.133"
+#define MULTICAST_IPV6_GROUP "FF02::244:0:0:133"
+
+/* Nuestro socket de red */
 static int fd_socket;
 
+/* El sockaddr para la dirección IPv4 y IPv6 multicast */
+struct sockaddr_in mcast_addr;
+struct sockaddr_in6 mcast_addr6;
+
+Uint32 multicast_timer;
+
 int findfour_netinit (int puerto) {
-	printf ("Estoy a la escucha en el puerto: %i\n", puerto);
 	struct sockaddr_storage bind_addr;
 	struct sockaddr_in6 *ipv6;
+	struct ip_mreq mcast_req;
+	struct ipv6_mreq mcast_req6;
+	int g;
 	
+	printf ("Estoy a la escucha en el puerto: %i\n", puerto);
 	/* Crear, iniciar el socket */
 	fd_socket = socket (AF_INET6, SOCK_DGRAM, 0);
 	
@@ -72,6 +85,47 @@ int findfour_netinit (int puerto) {
 	
 	/* Intentar el binding request */
 	try_stun_binding ("stun.ekiga.net", fd_socket);
+	
+	/* Hacer join a los grupos multicast */
+	g = 0;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
+	
+	g = 64;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
+	
+	/* Primero join al IPv4 */
+	mcast_addr.sin_family = AF_INET;
+	mcast_addr.sin_port = htons (puerto);
+	
+	inet_aton (MULTICAST_IPV4_GROUP, &mcast_addr.sin_addr.s_addr);
+	mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
+	mcast_req.imr_interface.s_addr = INADDR_ANY;
+	
+	if (setsockopt (fd_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
+		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
+	}
+	
+	/* Intentar el join al grupo IPv6 */
+	mcast_addr6.sin6_family = AF_INET6;
+	mcast_addr6.sin6_port = htons (puerto);
+	mcast_addr6.sin6_flowinfo = 0;
+	mcast_addr6.sin6_scope_id = 0; /* Cualquier interfaz */
+	
+	g = 0;
+	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &g, sizeof (g));
+	
+	g = 64;
+	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &g, sizeof (g));
+	
+	inet_pton (AF_INET6, MULTICAST_IPV6_GROUP, &mcast_addr6.sin6_addr);
+	memcpy (&mcast_req6.ipv6mr_multiaddr, &(mcast_addr6.sin6_addr), sizeof (struct in6_addr));
+	mcast_req6.ipv6mr_interface = 0;
+	
+	if (setsockopt (fd_socket, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
+		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
+	}
+	
+	multicast_timer = SDL_GetTicks ();
 	
 	/* Ningún error */
 	return 0;
@@ -315,6 +369,28 @@ void enviar_fin_ack (Juego *juego, FF_NET *recv) {
 	printf ("Envié un FIN ACK. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
 }
 
+void enviar_broadcast_game (char *nick) {
+	int len;
+	char buffer[256];
+	FF_broadcast_game bgame;
+	
+	buffer[0] = buffer[1] = 'F';
+	buffer[2] = FLAG_MCG;
+	
+	buffer[3] = 1; /* Versión del protocolo */
+	
+	strncpy (&(buffer[4]), nick, sizeof (char) * NICK_SIZE);
+	
+	buffer[4 + NICK_SIZE - 1] = '\0';
+	
+	/* Enviar a IPv4 y IPv6 */
+	len = 4 + NICK_SIZE;
+	
+	sendto (fd_socket, buffer, len, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	
+	sendto (fd_socket, buffer, len, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+}
+
 int unpack (FF_NET *net, char *buffer, size_t len) {
 	uint16_t temp;
 	memset (net, 0, sizeof (FF_NET));
@@ -356,6 +432,10 @@ int unpack (FF_NET *net, char *buffer, size_t len) {
 	} else if (net->base.flags == FLAG_FIN) {
 		printf ("FIN Package len: %i\n", len);
 		net->fin.fin = buffer[7];
+	} else if (net->base.flags == FLAG_MCG) {
+		printf ("MCG Package len: %i\n", len);
+		net->bgame.version = buffer[3];
+		strncpy (net->syn.nick, &buffer[4], sizeof (char) * NICK_SIZE);
 	}
 	
 	/* Paquete completo */
@@ -381,6 +461,14 @@ void process_netevent (void) {
 		if (len < 0) break;
 		
 		if (unpack (&netmsg, buffer, len) < 0) continue;
+		
+		if (netmsg.base.flags == FLAG_MCG) {
+			/* Multicast de anuncio de partida de red */
+			buddy_list_mcast_add (netmsg.bgame.nick, &cliente, tamsock);
+			
+			ventana = (Juego *) ventana->ventana.next;
+			continue;
+		}
 		
 		manejado = FALSE;
 		/* Buscar el juego que haga match por el número de ack */
@@ -605,5 +693,11 @@ void process_netevent (void) {
 		}
 		
 		ventana = (Juego *) ventana->ventana.next;
+	}
+	
+	/* Enviar el anuncio de juego multicast */
+	if (now_time > multicast_timer + NET_MCAST_TIMER) {
+		enviar_broadcast_game ("Multigame gat");
+		multicast_timer = now_time;
 	}
 }

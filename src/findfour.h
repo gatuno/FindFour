@@ -72,6 +72,8 @@ enum {
 	
 	IMG_LIST_MINI,
 	
+	IMG_LIST_BIG,
+	
 	NUM_IMAGES
 };
 

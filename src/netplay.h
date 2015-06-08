@@ -27,12 +27,14 @@
 
 #define NET_CONN_TIMER 1850
 #define NET_READY_TIMER 4950
+#define NET_MCAST_TIMER 12000
 
 #define FLAG_ACK 0x01
 #define FLAG_SYN 0x02
 #define FLAG_TRN 0x04
 #define FLAG_FIN 0x08
 #define FLAG_ALV 0x10
+#define FLAG_MCG 0x20
 
 typedef struct {
 	uint8_t flags;
@@ -79,6 +81,12 @@ typedef struct {
 	uint8_t fin;
 } FF_fin;
 
+typedef struct {
+	uint8_t flags;
+	uint8_t version;
+	char nick[NICK_SIZE];
+} FF_broadcast_game;
+
 /* Estructura para el mensaje de red */
 typedef union {
 	FF_netbase base;
@@ -87,6 +95,7 @@ typedef union {
 	FF_ack ack;
 	FF_trn trn;
 	FF_fin fin;
+	FF_broadcast_game bgame;
 } FF_NET;
 
 /* Los posibles estados en los que se encuentra la partida */

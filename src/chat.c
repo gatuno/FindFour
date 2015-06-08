@@ -19,6 +19,8 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
+
 #include <SDL.h>
 
 #include "chat.h"
@@ -30,8 +32,9 @@ int chat_mouse_up (Chat *j, int x, int y, int **button_map);
 void chat_draw (Chat *j, SDL_Surface *screen);
 
 Uint32 azul1 = 0;
+static Chat *static_chat = NULL;
 
-Chat *inicializar_chat (void) {
+void inicializar_chat (void) {
 	Chat *c;
 	int g;
 	
@@ -58,6 +61,12 @@ Chat *inicializar_chat (void) {
 		c->buddys[g] = IMG_SHADOW_UP;
 	}
 	
+	c->buddy_mcast = NULL;
+	c->buddy_mcast_count = 0;
+	
+	c->list_display = CHAT_LIST_MCAST;
+	c->list_offset = 0;
+	
 	c->ventana.prev = NULL;
 	c->ventana.next = primero;
 	
@@ -68,7 +77,7 @@ Chat *inicializar_chat (void) {
 		primero = (Ventana *) c;
 	}
 	
-	return c;
+	static_chat = c;
 }
 
 int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
@@ -207,7 +216,8 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 
 void chat_draw (Chat *c, SDL_Surface *screen) {
 	SDL_Rect rect;
-	int g;
+	int g, h;
+	BuddyMCast *buddy;
 	
 	if (azul1 == 0) {
 		azul1 = SDL_MapRGB (screen->format, 0, 0x52, 0x9B);
@@ -276,5 +286,50 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 		
 		SDL_BlitSurface (images[c->buddys[g]], NULL, screen, &rect);
 	}
+	
+	/* Desplegar la lista correspondiente */
+	if (c->list_display == CHAT_LIST_MCAST) {
+		buddy = c->buddy_mcast;
+		
+		g = 0;
+		while (g < c->list_offset && buddy != NULL) {
+			buddy = buddy->next;
+			g++;
+		}
+		h = c->ventana.y + 65;
+		g = 0;
+		while (g < 8 && buddy != NULL) {
+			rect.x = c->ventana.x + 26;
+			rect.y = h + 3;
+			rect.w = images[IMG_LIST_BIG]->w;
+			rect.h = images[IMG_LIST_BIG]->h;
+			
+			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
+			
+			h = h + 26;
+			g++;
+			buddy = buddy->next;
+		}
+	}
+}
+
+void show_chat (void) {
+	static_chat->ventana.mostrar = TRUE;
+}
+
+void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock) {
+	BuddyMCast *nuevo;
+	
+	nuevo = (BuddyMCast *) malloc (sizeof (BuddyMCast));
+	
+	nuevo->next = static_chat->buddy_mcast;
+	static_chat->buddy_mcast = nuevo;
+	
+	strncpy (nuevo->nick, nick, NICK_SIZE);
+	memcpy (&(nuevo->cliente), direccion, tamsock);
+	nuevo->tamsock = tamsock;
+	
+	printf ("Posible partida de nombre: %s\n", nick);
+	static_chat->buddy_mcast_count++;
 }
 

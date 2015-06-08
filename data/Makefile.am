@@ -23,4 +23,5 @@ nobase_dist_gamedata_DATA = images/lodge.png \
 	images/shadow-over.png \
 	images/shadow-up.png \
 	images/ventana-chat.png \
-	images/list-mini.png
+	images/list-mini.png \
+	images/list-big.png

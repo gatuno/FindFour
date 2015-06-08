@@ -101,7 +101,8 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/button-list-over.png",
 	GAMEDATA_DIR "images/button-list-down.png",
 	
-	GAMEDATA_DIR "images/list-mini.png"
+	GAMEDATA_DIR "images/list-mini.png",
+	GAMEDATA_DIR "images/list-big.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -156,7 +157,6 @@ int game_loop (void) {
 	Uint32 last_time, now_time;
 	SDL_Rect rect;
 	int *map = NULL;
-	Chat *chat;
 	
 	int g, h;
 	int start = 0;
@@ -182,7 +182,7 @@ int game_loop (void) {
 		return GAME_QUIT;
 	}
 	
-	chat = inicializar_chat ();
+	inicializar_chat ();
 	
 	do {
 		last_time = SDL_GetTicks ();
@@ -199,7 +199,7 @@ int game_loop (void) {
 						
 						conectar_con ((Juego *) ventana, "Gatuno Cliente", "127.0.0.1", client_port);
 					} else if (event.key.keysym.sym == SDLK_c) {
-						chat->ventana.mostrar = TRUE;
+						show_chat ();
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
