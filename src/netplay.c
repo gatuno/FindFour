@@ -39,7 +39,7 @@
 #include "stun.h"
 
 #define MULTICAST_IPV4_GROUP "224.0.0.133"
-#define MULTICAST_IPV6_GROUP "FF02::244:0:0:133"
+#define MULTICAST_IPV6_GROUP "FF02::224:0:0:133"
 
 /* Nuestro socket de red */
 static int fd_socket;
@@ -90,7 +90,7 @@ int findfour_netinit (int puerto) {
 	g = 0;
 	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
 	
-	g = 64;
+	g = 1;
 	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
 	
 	/* Primero join al IPv4 */
@@ -157,7 +157,7 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	juego->len_send = 8 + NICK_SIZE;
 	
 	/* Para conectar, hay que convertir la ip a sockaddr 
-	 * FIXME: Hacer conversión con GetAddresInfo */
+	 * FIXME: Hacer conversión con GetAddressInfo */
 	struct sockaddr_in *ipv4;
 	ipv4 = (struct sockaddr_in *) &juego->cliente;
 	ipv4->sin_family = AF_INET;
@@ -165,6 +165,42 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	inet_pton (AF_INET, "127.0.0.1", &ipv4->sin_addr);
 	
 	juego->tamsock = sizeof (juego->cliente);
+	
+	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	juego->last_response = SDL_GetTicks ();
+	juego->retry = 0;
+	printf ("Envié un SYN inicial. Mi seq: %i\n", juego->seq);
+	juego->estado = NET_SYN_SENT;
+}
+
+void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *destino, socklen_t tamsock) {
+	uint16_t temp;
+	
+	/* Generar un número de secuencia aleatorio */
+	while (juego->seq == 0) {
+		juego->seq = RANDOM (65535);
+	}
+	
+	/* Rellenar con la firma del protocolo FF */
+	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	
+	/* Rellenar los bytes */
+	juego->buffer_send[2] = FLAG_SYN;
+	printf ("Conexión de salida, seq antes: %i\n", juego->seq);
+	temp = htons (juego->seq++);
+	printf ("Conexión de salida, seq después: %i\n", juego->seq);
+	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
+	temp = 0; /* Ack 0 inicial */
+	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	juego->buffer_send[7] = 1; /* Versión del protocolo */
+	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	juego->buffer_send[7 + NICK_SIZE] = '\0';
+	juego->len_send = 8 + NICK_SIZE;
+	
+	/* Copiar el sockaddr */
+	memcpy (&juego->cliente, destino, tamsock);
+	
+	juego->tamsock = tamsock;
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	juego->last_response = SDL_GetTicks ();
@@ -435,7 +471,7 @@ int unpack (FF_NET *net, char *buffer, size_t len) {
 	} else if (net->base.flags == FLAG_MCG) {
 		printf ("MCG Package len: %i\n", len);
 		net->bgame.version = buffer[3];
-		strncpy (net->syn.nick, &buffer[4], sizeof (char) * NICK_SIZE);
+		strncpy (net->bgame.nick, &buffer[4], sizeof (char) * NICK_SIZE);
 	}
 	
 	/* Paquete completo */
@@ -646,6 +682,12 @@ void process_netevent (void) {
 		if (ventana->retry >= 5) {
 			if (ventana->estado == NET_WAIT_CLOSING) {
 				/* Demasiados intentos */
+				next = (Juego *) ventana->ventana.next;
+				eliminar_juego (ventana);
+				ventana = next;
+			} else if (ventana->estado == NET_SYN_SENT) {
+				/* Caso especial, enviamos un SYN y nunca llegó,
+				 * ni siquiera intentamos enviar el fin */
 				next = (Juego *) ventana->ventana.next;
 				eliminar_juego (ventana);
 				ventana = next;

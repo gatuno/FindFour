@@ -19,12 +19,16 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <SDL.h>
+#include <SDL_ttf.h>
 
 #include "chat.h"
 #include "cp-button.h"
+#include "netplay.h"
+#include "juego.h"
 
 int chat_mouse_down (Chat *j, int x, int y, int **button_map);
 int chat_mouse_motion (Chat *j, int x, int y, int **button_map);
@@ -33,6 +37,31 @@ void chat_draw (Chat *j, SDL_Surface *screen);
 
 Uint32 azul1 = 0;
 static Chat *static_chat = NULL;
+TTF_Font *ttf_font;
+
+int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
+#define CMP(a, b) if (a != b) return a < b ? -1 : 1
+
+	CMP(x->sa_family, y->sa_family);
+
+	if (x->sa_family == AF_INET) {
+		struct sockaddr_in *xin = (void*)x, *yin = (void*)y;
+		CMP(ntohl(xin->sin_addr.s_addr), ntohl(yin->sin_addr.s_addr));
+		CMP(ntohs(xin->sin_port), ntohs(yin->sin_port));
+	} else if (x->sa_family == AF_INET6) {
+		struct sockaddr_in6 *xin6 = (void*)x, *yin6 = (void*)y;
+		int r = memcmp (xin6->sin6_addr.s6_addr, yin6->sin6_addr.s6_addr, sizeof(xin6->sin6_addr.s6_addr));
+		if (r != 0) return r;
+		CMP(ntohs(xin6->sin6_port), ntohs(yin6->sin6_port));
+		//CMP(xin6->sin6_flowinfo, yin6->sin6_flowinfo);
+		CMP(xin6->sin6_scope_id, yin6->sin6_scope_id);
+	} else {
+		return -1; /* Familia desconocida */
+	}
+
+#undef CMP
+	return 0;
+}
 
 void inicializar_chat (void) {
 	Chat *c;
@@ -78,6 +107,9 @@ void inicializar_chat (void) {
 	}
 	
 	static_chat = c;
+	/* Quitar esto */
+	TTF_Init ();
+	ttf_font = TTF_OpenFont (GAMEDATA_DIR "ccfacefront.ttf", 14);
 }
 
 int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
@@ -107,7 +139,7 @@ int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
 		return TRUE;
 	}
 	/* Los 8 buddys */
-	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+	if (x >= 18 && x < 188 && y >= 65 && y < 272) {
 		g = (y - 65);
 		if ((g % 26) < 25) {
 			g = g / 26;
@@ -144,7 +176,7 @@ int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
 		return TRUE;
 	}
 	/* Los 8 buddys */
-	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+	if (x >= 18 && x < 188 && y >= 65 && y < 272) {
 		g = (y - 65);
 		if ((g % 26) < 25) {
 			g = g / 26;
@@ -159,7 +191,8 @@ int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
 }
 
 int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
-	int g;
+	int g, h;
+	BuddyMCast *buddy;
 	if (c->ventana.mostrar == FALSE) return FALSE;
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
@@ -175,7 +208,7 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 	if (x >= 190 && x < 218 && y >= 61 && y < 89) {
 		*button_map = &(c->up_frame);
 		if (cp_button_up (*button_map)) {
-			/* No hacer nada, por el momento */
+			if (c->list_offset > 0) c->list_offset -= 8; /* Asumiendo que siempre son múltiplos de 8 */
 		}
 		return TRUE;
 	}
@@ -183,7 +216,9 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 	if (x >= 190 && x < 218 && y >= 245 && y < 273) {
 		*button_map = &(c->down_frame);
 		if (cp_button_up (*button_map)) {
-			/* No hacer nada, por el momento */
+			if (c->list_display == CHAT_LIST_MCAST && c->list_offset + 8 < c->buddy_mcast_count) {
+				c->list_offset += 8;
+			}
 		}
 		return TRUE;
 	}
@@ -192,18 +227,37 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 	if (x >= 102 && x < 130 && y >= 275 && y < 303){
 		*button_map = &(c->broadcast_list_frame);
 		if (cp_button_up (*button_map)) {
-			/* No hacer nada, por el momento */
+			if (c->list_display != CHAT_LIST_MCAST) {
+				c->list_offset = 0;
+				c->list_display = CHAT_LIST_MCAST;
+			}
 		}
 		return TRUE;
 	}
 	/* Los 8 buddys */
-	if (x >= 18 && x < 188 && y >= 65 && y < 247) {
+	if (x >= 18 && x < 188 && y >= 65 && y < 272) {
 		g = (y - 65);
 		if ((g % 26) < 25) {
 			g = g / 26;
 			*button_map = &(c->buddys[g]);
 			if (cp_button_up (*button_map)) {
-				/* Click a un buddy */
+				/* Calcular el buddy seleccionado */
+				h = c->list_offset + g;
+				if (c->list_display == CHAT_LIST_MCAST && h < c->buddy_mcast_count) {
+					/* Recorrer la lista */
+					buddy = c->buddy_mcast;
+					
+					g = 0;
+					while (g < h) {
+						buddy = buddy->next;
+						g++;
+					}
+					Juego *j;
+					j = crear_juego ();
+					conectar_con_sockaddr (j, "Gatuno Cliente", (struct sockaddr *)&buddy->cliente, buddy->tamsock);
+				}
+				
+				/* Revisar otras listas */
 			}
 		}
 	}
@@ -306,6 +360,12 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 			
 			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
 			
+			rect.x = c->ventana.x + 30 + images[IMG_LIST_BIG]->w;
+			rect.y = h + 5;
+			rect.w = buddy->nick_chat->w;
+			rect.h = buddy->nick_chat->h;
+			SDL_BlitSurface (buddy->nick_chat, NULL, screen, &rect);
+			
 			h = h + 26;
 			g++;
 			buddy = buddy->next;
@@ -319,6 +379,18 @@ void show_chat (void) {
 
 void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock) {
 	BuddyMCast *nuevo;
+	char buffer[256];
+	
+	/* Buscar entre los buddys locales que no esté duplicado */
+	nuevo = static_chat->buddy_mcast;
+	
+	while (nuevo != NULL) {
+		if (sockaddr_cmp (direccion, (struct sockaddr *) &(nuevo->cliente)) == 0) {
+			/* TODO: En caso de coincidir, actualizar el nick */
+			return;
+		}
+		nuevo = nuevo->next;
+	}
 	
 	nuevo = (BuddyMCast *) malloc (sizeof (BuddyMCast));
 	
@@ -328,6 +400,16 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	strncpy (nuevo->nick, nick, NICK_SIZE);
 	memcpy (&(nuevo->cliente), direccion, tamsock);
 	nuevo->tamsock = tamsock;
+	SDL_Color blanco = {255, 255, 255};
+	
+	if (direccion->sa_family == AF_INET) {
+		sprintf (buffer, "%s [IPv4]", nick);
+	} else if (direccion->sa_family == AF_INET6) {
+		sprintf (buffer, "%s [IPv6]", nick);
+	} else {
+		sprintf (buffer, "%s [???]", nick);
+	}
+	nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf_font, buffer, blanco);
 	
 	printf ("Posible partida de nombre: %s\n", nick);
 	static_chat->buddy_mcast_count++;

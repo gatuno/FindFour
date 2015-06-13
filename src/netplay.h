@@ -24,6 +24,7 @@
 #include <stdint.h>
 
 #include "findfour.h"
+#include "juego.h"
 
 #define NET_CONN_TIMER 1850
 #define NET_READY_TIMER 4950
@@ -133,7 +134,8 @@ int findfour_netinit (int);
 
 void process_netevent (void);
 
-void conectar_con (Juego *juego, const char *, const char *, const int);
+void conectar_con (Juego *, const char *, const char *, const int);
+void conectar_con_sockaddr (Juego *, const char *, struct sockaddr *, socklen_t);
 void enviar_movimiento (Juego *, int, int);
 void enviar_fin (Juego *, FF_NET *, int);
 

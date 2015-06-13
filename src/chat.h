@@ -21,6 +21,8 @@
 #ifndef __CHAT_H__
 #define __CHAT_H__
 
+#include <SDL.h>
+
 /* Para el manejo de red */
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -42,6 +44,10 @@ typedef struct _BuddyMCast {
 	
 	/* La dirección del cliente */
 	struct sockaddr_storage cliente;
+	
+	/* El nombre del cliente renderizado */
+	SDL_Surface *nick_chat;
+	
 	socklen_t tamsock;
 } BuddyMCast;
 
