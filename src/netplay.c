@@ -266,8 +266,7 @@ void enviar_ack_0 (Juego *juego, FF_NET *recv) {
 	
 	juego->buffer_send[2] = FLAG_ACK;
 	printf ("Enviando ACK, el seq antes: %i\n", juego->seq);
-	temp = htons (juego->seq++);
-	printf ("Enviando ACK, el seq después: %i\n", juego->seq);
+	temp = htons (juego->seq);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
 	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
@@ -312,7 +311,7 @@ void enviar_trn_ack (Juego *juego, FF_NET *recv) {
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	
 	juego->buffer_send[2] = FLAG_TRN | FLAG_ACK;
-	temp = htons (juego->seq++);
+	temp = htons (juego->seq);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
 	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
@@ -351,7 +350,7 @@ void enviar_keep_alive_ack (Juego *juego, FF_NET *recv) {
 	
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	juego->buffer_send[2] = FLAG_ALV | FLAG_ACK;
-	temp = htons (juego->seq++);
+	temp = htons (juego->seq);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
 	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
@@ -399,7 +398,7 @@ void enviar_fin_ack (Juego *juego, FF_NET *recv) {
 	
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	juego->buffer_send[2] = FLAG_FIN | FLAG_ACK;
-	temp = htons (juego->seq++);
+	temp = htons (juego->seq);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
 	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
@@ -507,6 +506,7 @@ void process_netevent (void) {
 	int manejado;
 	int len;
 	Uint32 now_time;
+	uint16_t temp;
 	
 	do {
 		tamsock = sizeof (cliente);
@@ -568,7 +568,7 @@ void process_netevent (void) {
 				} else if (ventana->estado == NET_SYN_RECV && netmsg.base.flags == FLAG_ACK) {
 					printf ("Listo para jugar\n");
 					ventana->estado = NET_READY;
-					ventana->ack = netmsg.ack.seq + 1;
+					//ventana->ack = netmsg.ack.seq + 1;
 				} else if ((ventana->estado == NET_SYN_RECV || ventana->estado == NET_READY) && netmsg.base.flags == FLAG_TRN) {
 					ventana->estado = NET_READY;
 					
@@ -595,12 +595,12 @@ void process_netevent (void) {
 					/* Es una confirmación de mi movimiento */
 					/* Nada que revisar */
 					/* Tomar su número de seq */
-					ventana->ack = netmsg.base.seq + 1;
+					//ventana->ack = netmsg.base.seq + 1;
 					ventana->estado = NET_READY;
 				} else if (ventana->estado == NET_READY && netmsg.base.flags == (FLAG_ALV | FLAG_ACK)) {
 					/* Una confirmación de keep alive */
 					printf ("Recibí un Keep alive ACK\n");
-					ventana->ack = netmsg.base.seq + 1;
+					//ventana->ack = netmsg.base.seq + 1;
 					ventana->retry = 0;
 					ventana->last_response = SDL_GetTicks ();
 				} else if (ventana->estado == NET_READY && netmsg.base.flags == FLAG_ALV) {
@@ -619,9 +619,12 @@ void process_netevent (void) {
 					continue;
 				}
 			} else if (netmsg.base.ack == (ventana->seq - 1)) {
-				//if (ventana->estado
 				manejado = TRUE;
 				/* Coincide por número de secuencia, pero es una solicitud de repetición */
+				
+				/* Reenviar, pero modificar el ack con su número de secuencia como ack */
+				temp = htons (netmsg.base.seq + 1);
+				memcpy (&ventana->buffer_send[5], &temp, sizeof (temp));
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
 				ventana->last_response = SDL_GetTicks ();
 				printf ("Una repetición de paquete, responderemos con el último paquete que nosotros enviamos\n");
@@ -678,7 +681,8 @@ void process_netevent (void) {
 			continue;
 		}
 		
-		if (ventana->estado == NET_READY) {
+		/* Enviar un keep alive sólo si NO es nuestro turno */
+		if (ventana->estado == NET_READY && (ventana->turno % 2) != ventana->inicio) {
 			if (ventana->retry == 0 && now_time > ventana->last_response + NET_READY_TIMER) {
 				/* Enviar un Keep Alive */
 				enviar_keep_alive (ventana);
