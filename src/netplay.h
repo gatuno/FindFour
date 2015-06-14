@@ -131,6 +131,7 @@ enum {
 
 /* Funciones públicas */
 int findfour_netinit (int);
+void findfour_netclose (void);
 
 void process_netevent (void);
 

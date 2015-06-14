@@ -360,7 +360,7 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 			
 			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
 			
-			rect.x = c->ventana.x + 30 + images[IMG_LIST_BIG]->w;
+			rect.x = c->ventana.x + 46;
 			rect.y = h + 5;
 			rect.w = buddy->nick_chat->w;
 			rect.h = buddy->nick_chat->h;
@@ -415,3 +415,29 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	static_chat->buddy_mcast_count++;
 }
 
+void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock) {
+	BuddyMCast *this, *prev;
+	
+	/* Tratar de encontrar el buddy, pero ignorar si no aparece */
+	prev = this = static_chat->buddy_mcast;
+	
+	while (this != NULL) {
+		if (sockaddr_cmp (direccion, (struct sockaddr *) &(this->cliente)) == 0) {
+			/* Eliminar este item */
+			if (this == static_chat->buddy_mcast) {
+				static_chat->buddy_mcast = this->next;
+			} else {
+				prev->next = this->next;
+			}
+			static_chat->buddy_mcast_count--;
+			
+			if (static_chat->list_display == CHAT_LIST_MCAST && static_chat->list_offset >= static_chat->buddy_mcast_count) {
+				if (static_chat->list_offset > 0) static_chat->list_offset -= 8;
+			}
+			free (this);
+			break;
+		}
+		this = this->next;
+		if (prev != static_chat->buddy_mcast) prev = prev->next;
+	}
+}

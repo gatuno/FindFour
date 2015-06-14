@@ -61,7 +61,8 @@ typedef struct _Juego {
 
 /* Funciones públicas */
 Juego *crear_juego (void);
-void eliminar_juego (Juego *juego);
+void eliminar_juego (Juego *);
+int recibir_movimiento (Juego *, int turno, int col, int fila, int *);
 
 #endif /* __JUEGO_H__ */
 

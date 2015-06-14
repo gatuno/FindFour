@@ -163,9 +163,6 @@ int game_loop (void) {
 	int x, y;
 	int manejado;
 	
-	/* Para la red */
-	int fd_sock;
-	
 	primero = NULL;
 	ultimo = NULL;
 	Ventana *ventana;
@@ -174,9 +171,7 @@ int game_loop (void) {
 	
 	drag = NULL;
 	
-	fd_sock = findfour_netinit (server_port);
-	
-	if (fd_sock < 0) {
+	if (findfour_netinit (server_port) < 0) {
 		/* FIXME: Mostrar ventana de error */
 		
 		return GAME_QUIT;
@@ -323,6 +318,8 @@ int game_loop (void) {
 		if (now_time < last_time + FPS) SDL_Delay(last_time + FPS - now_time);
 		
 	} while (!done);
+	
+	findfour_netclose ();
 	
 	return done;
 }

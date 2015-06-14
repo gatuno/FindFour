@@ -221,6 +221,38 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	return FALSE;
 }
 
+int recibir_movimiento (Juego *j, int turno, int col, int fila, int *fin) {
+	int g;
+	if (j->turno != turno) {
+		printf ("Número de turno equivocado\n");
+		*fin = NET_DISCONNECT_WRONG_TURN;
+		return -1;
+	} else if (j->turno % 2 == j->inicio) {
+		printf ("Es nuestro turno, cerrar esta conexión\n");
+		*fin = NET_DISCONNECT_WRONG_TURN;
+		return -1;
+	} else if (j->tablero[0][col] != 0) {
+		/* Tablero lleno, columna equivocada */
+		printf ("Columna llena, no deberias poner fichas ahí\n");
+		*fin = NET_DISCONNECT_WRONG_MOV;
+		return -1;
+	} else {
+		g = 5;
+		while (g > 0 && j->tablero[g][col] != 0) g--;
+	
+		/* Poner la ficha en la posición [g][turno] y avanzar turno */
+		if (g != fila) {
+			printf ("La ficha de mi lado cayó en la fila incorrecta\n");
+			*fin = NET_DISCONNECT_WRONG_MOV;
+			return -1;
+		} else {
+			j->tablero[g][col] = (j->turno % 2) + 1;
+			j->turno++;
+			return 0;
+		}
+	}
+}
+
 void juego_draw (Juego *j, SDL_Surface *screen) {
 	SDL_Rect rect;
 	int g, h;

@@ -131,6 +131,15 @@ int findfour_netinit (int puerto) {
 	return 0;
 }
 
+void findfour_netclose (void) {
+	/* Enviar el multicast de retiro de partida */
+	
+	enviar_end_broadcast_game ();
+	/* Y cerrar el socket */
+	
+	close (fd_socket);
+}
+
 void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
 	uint16_t temp;
 	
@@ -406,8 +415,7 @@ void enviar_fin_ack (Juego *juego, FF_NET *recv) {
 }
 
 void enviar_broadcast_game (char *nick) {
-	int len;
-	char buffer[256];
+	char buffer[32];
 	FF_broadcast_game bgame;
 	
 	buffer[0] = buffer[1] = 'F';
@@ -420,11 +428,22 @@ void enviar_broadcast_game (char *nick) {
 	buffer[4 + NICK_SIZE - 1] = '\0';
 	
 	/* Enviar a IPv4 y IPv6 */
-	len = 4 + NICK_SIZE;
+	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
 	
-	sendto (fd_socket, buffer, len, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+}
+
+void enviar_end_broadcast_game (void) {
+	char buffer[4];
+	FF_broadcast_game bgame;
 	
-	sendto (fd_socket, buffer, len, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+	buffer[0] = buffer[1] = 'F';
+	buffer[2] = FLAG_MCG | FLAG_FIN;
+	
+	/* Enviar a IPv4 y IPv6 */
+	sendto (fd_socket, buffer, 3, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	
+	sendto (fd_socket, buffer, 3, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
 }
 
 int unpack (FF_NET *net, char *buffer, size_t len) {
@@ -484,7 +503,7 @@ void process_netevent (void) {
 	Juego *ventana, *next;
 	struct sockaddr_storage cliente;
 	socklen_t tamsock;
-	int g, h;
+	int g;
 	int manejado;
 	int len;
 	Uint32 now_time;
@@ -501,8 +520,10 @@ void process_netevent (void) {
 		if (netmsg.base.flags == FLAG_MCG) {
 			/* Multicast de anuncio de partida de red */
 			buddy_list_mcast_add (netmsg.bgame.nick, &cliente, tamsock);
-			
-			ventana = (Juego *) ventana->ventana.next;
+			continue;
+		} else if (netmsg.base.flags == (FLAG_MCG | FLAG_FIN)) {
+			/* Multicast de eliminación de partida */
+			buddy_list_mcast_remove (&cliente, tamsock);
 			continue;
 		}
 		
@@ -551,66 +572,24 @@ void process_netevent (void) {
 				} else if ((ventana->estado == NET_SYN_RECV || ventana->estado == NET_READY) && netmsg.base.flags == FLAG_TRN) {
 					ventana->estado = NET_READY;
 					
-					if (ventana->turno != netmsg.trn.turno) {
-						printf ("Número de turno equivocado\n");
-						enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_TURN);
-					} else if (ventana->turno % 2 == ventana->inicio) {
-						printf ("Es nuestro turno, cerrar esta conexión\n");
-						enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_TURN);
+					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
+						/* Como no hubo errores, enviar el ack */
+						enviar_trn_ack (ventana, &netmsg);
 					} else {
-						h = netmsg.trn.col;
-						if (ventana->tablero[0][h] != 0) {
-							/* Tablero lleno, columna equivocada */
-							/* FIXME: Detener esta partida */
-							printf ("Columna llena, no deberias poner fichas ahí\n");
-							enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_MOV);
-						} else {
-							g = 5;
-							while (g > 0 && ventana->tablero[g][h] != 0) g--;
-						
-							/* Poner la ficha en la posición [g][h] y avanzar turno */
-							if (g != netmsg.trn.fila) {
-								printf ("La ficha de mi lado cayó en la fila incorrecta\n");
-								enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_MOV);
-							} else {
-								ventana->tablero[g][h] = (ventana->turno % 2) + 1;
-								ventana->turno++;
-								enviar_trn_ack (ventana, &netmsg);
-							}
-						}
+						/* Hubo errores, enviar un fin */
+						enviar_fin (ventana, &netmsg, g);
 					}
 				} else if (ventana->estado == NET_WAIT_TRN_ACK && netmsg.base.flags == FLAG_TRN) {
 					/* Nos llegó un movimiento cuando estabamos esperando el ack */
 					/* Como su número de ack coincide con nuestro último envio, estamos bien */
 					ventana->estado = NET_READY;
 					
-					if (ventana->turno != netmsg.trn.turno) {
-						printf ("Número de turno equivocado\n");
-						enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_TURN);
-					} else if (ventana->turno % 2 == ventana->inicio) {
-						printf ("Es nuestro turno, cerrar esta conexión\n");
-						enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_TURN);
+					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
+						/* Como no hubo errores, enviar el ack */
+						enviar_trn_ack (ventana, &netmsg);
 					} else {
-						h = netmsg.trn.col;
-						if (ventana->tablero[0][h] != 0) {
-							/* Tablero lleno, columna equivocada */
-							/* FIXME: Detener esta partida */
-							printf ("Columna llena, no deberias poner fichas ahí\n");
-							enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_MOV);
-						} else {
-							g = 5;
-							while (g > 0 && ventana->tablero[g][h] != 0) g--;
-						
-							/* Poner la ficha en la posición [g][h] y avanzar turno */
-							if (g != netmsg.trn.fila) {
-								printf ("La ficha de mi lado cayó en la fila incorrecta\n");
-								enviar_fin (ventana, &netmsg, NET_DISCONNECT_WRONG_MOV);
-							} else {
-								ventana->tablero[g][h] = (ventana->turno % 2) + 1;
-								ventana->turno++;
-								enviar_trn_ack (ventana, &netmsg);
-							}
-						}
+						/* Hubo errores, enviar un fin */
+						enviar_fin (ventana, &netmsg, g);
 					}
 				} else if (ventana->estado == NET_WAIT_TRN_ACK && netmsg.base.flags == (FLAG_TRN | FLAG_ACK)) {
 					/* Es una confirmación de mi movimiento */
@@ -636,10 +615,11 @@ void process_netevent (void) {
 					next = (Juego *) ventana->ventana.next;
 					eliminar_juego (ventana);
 					ventana = next;
-					continue;
 					printf ("Recibí un FIN + ACK, esto está totalmente cerrado\n");
+					continue;
 				}
 			} else if (netmsg.base.ack == (ventana->seq - 1)) {
+				//if (ventana->estado
 				manejado = TRUE;
 				/* Coincide por número de secuencia, pero es una solicitud de repetición */
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
