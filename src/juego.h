@@ -49,6 +49,7 @@ typedef struct _Juego {
 	
 	/* El nick del otro jugador */
 	char nick[NICK_SIZE];
+	int win, win_col, win_fila, win_dir;
 	
 	/* Estado del protocolo de red */
 	int estado;
@@ -63,6 +64,7 @@ typedef struct _Juego {
 Juego *crear_juego (void);
 void eliminar_juego (Juego *);
 int recibir_movimiento (Juego *, int turno, int col, int fila, int *);
+void buscar_ganador (Juego *j);
 
 #endif /* __JUEGO_H__ */
 

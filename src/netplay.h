@@ -116,6 +116,15 @@ enum {
 	/* Conexión que se está cerrando, esperamos por un último FIN + ACK si es que llega */
 	NET_WAIT_CLOSING,
 	
+	/* Conexión que sigue en linea, pero esperamos a que el otro extremo nos envié el anuncio de ganador */
+	NET_WAIT_WINNER,
+	
+	/* Conexión que espera el FIN + ACK del ganador para poder cerrar la conexión */
+	NET_WAIT_WINNER_ACK,
+	
+	/* Conexión cerrada, para mostrar cuando alguien gana */
+	NET_CLOSED,
+	
 	NUM_NETSTATE
 };
 
@@ -126,7 +135,10 @@ enum {
 	NET_DISCONNECT_WRONG_TURN, /* Número de turno equivocado */
 	NET_DISCONNECT_WRONG_MOV, /* Movimiento equivocado, AKA columna llena */
 	
-	NET_USER_QUIT /* El usuario abandonó la partida */
+	NET_USER_QUIT, /* El usuario abandonó la partida */
+	
+	NET_DISCONNECT_YOUWIN = 64,
+	NET_DISCONNECT_YOULOST
 };
 
 /* Funciones públicas */

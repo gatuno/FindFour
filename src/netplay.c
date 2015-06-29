@@ -382,13 +382,17 @@ void enviar_fin (Juego *juego, FF_NET *recv, int razon) {
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	
-	juego->estado = NET_WAIT_CLOSING;
+	if (razon == NET_DISCONNECT_YOUWIN || razon == NET_DISCONNECT_YOULOST) {
+		juego->estado = NET_WAIT_WINNER_ACK;
+	} else {
+		juego->estado = NET_WAIT_CLOSING;
+		/* Ocultar la ventana */
+		juego->ventana.mostrar = FALSE;
+	}
+	
 	juego->last_response = SDL_GetTicks ();
 	juego->retry = 0;
 	printf ("Envié un FIN. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
-	
-	/* Ocultar la ventan */
-	juego->ventana.mostrar = FALSE;
 }
 
 void enviar_fin_ack (Juego *juego, FF_NET *recv) {
@@ -407,7 +411,6 @@ void enviar_fin_ack (Juego *juego, FF_NET *recv) {
 	
 	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
 	
-	juego->estado = NET_WAIT_CLOSING;
 	juego->last_response = SDL_GetTicks ();
 	juego->retry = 0;
 	printf ("Envié un FIN ACK. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
@@ -541,11 +544,16 @@ void process_netevent (void) {
 				/* Coincide por número de secuencia */
 				if (netmsg.base.flags == FLAG_FIN) {
 					/* Un fin en cualquier momento es fin */
-					enviar_fin_ack (ventana, &netmsg);
-					next = (Juego *) ventana->ventana.next;
-					eliminar_juego (ventana);
-					ventana = next;
-					continue;
+					if (ventana->estado == NET_WAIT_WINNER) {
+						enviar_fin_ack (ventana, &netmsg);
+						ventana->estado = NET_CLOSED;
+					} else {
+						enviar_fin_ack (ventana, &netmsg);
+						next = (Juego *) ventana->ventana.next;
+						eliminar_juego (ventana);
+						ventana = next;
+						continue;
+					}
 				} else if (ventana->estado == NET_SYN_SENT && netmsg.base.flags == (FLAG_SYN | FLAG_ACK)) {
 					
 					/* Revisar quién empieza */
@@ -575,6 +583,7 @@ void process_netevent (void) {
 					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
 						/* Como no hubo errores, enviar el ack */
 						enviar_trn_ack (ventana, &netmsg);
+						buscar_ganador (ventana);
 					} else {
 						/* Hubo errores, enviar un fin */
 						enviar_fin (ventana, &netmsg, g);
@@ -587,6 +596,7 @@ void process_netevent (void) {
 					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
 						/* Como no hubo errores, enviar el ack */
 						enviar_trn_ack (ventana, &netmsg);
+						buscar_ganador (ventana);
 					} else {
 						/* Hubo errores, enviar un fin */
 						enviar_fin (ventana, &netmsg, g);
@@ -597,6 +607,7 @@ void process_netevent (void) {
 					/* Tomar su número de seq */
 					//ventana->ack = netmsg.base.seq + 1;
 					ventana->estado = NET_READY;
+					buscar_ganador (ventana);
 				} else if (ventana->estado == NET_READY && netmsg.base.flags == (FLAG_ALV | FLAG_ACK)) {
 					/* Una confirmación de keep alive */
 					printf ("Recibí un Keep alive ACK\n");
@@ -617,14 +628,17 @@ void process_netevent (void) {
 					ventana = next;
 					printf ("Recibí un FIN + ACK, esto está totalmente cerrado\n");
 					continue;
+				} else if (ventana->estado == NET_WAIT_WINNER_ACK && netmsg.base.flags == (FLAG_FIN | FLAG_ACK)) {
+					/* EL ACK de fin de que el juego está completo */
+					ventana->estado = NET_CLOSED;
 				}
 			} else if (netmsg.base.ack == (ventana->seq - 1)) {
 				manejado = TRUE;
 				/* Coincide por número de secuencia, pero es una solicitud de repetición */
 				
 				/* Reenviar, pero modificar el ack con su número de secuencia como ack */
-				temp = htons (netmsg.base.seq + 1);
-				memcpy (&ventana->buffer_send[5], &temp, sizeof (temp));
+				//temp = htons (netmsg.base.seq + 1);
+				//memcpy (&ventana->buffer_send[5], &temp, sizeof (temp));
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
 				ventana->last_response = SDL_GetTicks ();
 				printf ("Una repetición de paquete, responderemos con el último paquete que nosotros enviamos\n");
@@ -712,6 +726,16 @@ void process_netevent (void) {
 				ventana->retry++;
 			} else if (ventana->estado == NET_WAIT_CLOSING) {
 				printf ("Reenviando FIN por timer\n");
+				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
+				ventana->last_response = SDL_GetTicks ();
+				ventana->retry++;
+			} else if (ventana->estado == NET_WAIT_WINNER_ACK) {
+				printf ("Reenviando FIN de ganador por timer\n");
+				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
+				ventana->last_response = SDL_GetTicks ();
+				ventana->retry++;
+			} else if (ventana->estado == NET_WAIT_WINNER) {
+				printf ("Reenviando TRN + ACK esperando a que llegue el FIN\n");
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
 				ventana->last_response = SDL_GetTicks ();
 				ventana->retry++;

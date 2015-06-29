@@ -58,6 +58,7 @@ Juego *crear_juego (void) {
 	j->ventana.draw = juego_draw;
 	
 	j->turno = 0;
+	j->win = 0;
 	j->inicio = -1;
 	j->resalte = -1;
 	j->close_frame = IMG_BUTTON_CLOSE_UP;
@@ -131,7 +132,7 @@ int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
 	j->resalte = -1;
 	
 	/* Si es nuestro turno, hacer resalte */
-	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio) {
+	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY) {
 		/* Está dentro del tablero */
 		if (x >= 32 && x < 56 && j->tablero[0][0] == 0) {
 			/* Primer fila de resalte */
@@ -169,7 +170,7 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	
 	if (j->ventana.mostrar == FALSE) return FALSE;
 	
-	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio) {
+	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY) {
 		/* Está dentro del tablero */
 		h = -1;
 		if (x >= 32 && x < 56 && j->tablero[0][0] == 0) {
@@ -209,7 +210,11 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 		if (cp_button_up (*button_map)) {
 			/* Quitar esta ventana */
 			printf ("Me pidieron quitar esta ventana\n");
-			enviar_fin (j, NULL, NET_USER_QUIT);
+			if (j->estado != NET_CLOSED) {
+				enviar_fin (j, NULL, NET_USER_QUIT);
+			} else {
+				/* Quitar esta ventana sin enviar fin */
+			}
 		}
 	}
 	
@@ -219,6 +224,108 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	}
 	
 	return FALSE;
+}
+
+void buscar_ganador (Juego *j) {
+	int g, h;
+	
+	/* Tablero:
+	   0 1 2 3 4 5 6
+	  ---------------
+	5 | | | | | | | |
+	  ---------------
+	4 | | | | | | | |
+	  ---------------
+	3 | | | | | | | |
+	  ---------------
+	2 | | | | | | | |
+	  ---------------
+	1 | | | | | | | |
+	  ---------------
+	0 | | | | | | | |
+	  ---------------
+	 */
+	
+	/* Buscar por columnas */
+	for (g = 0; g < 7; g++) {
+		for (h = 0; h < 3; h++) { /* Las 3 primeras filas */
+			if (j->tablero[h][g] == j->tablero[h + 1][g] &&
+			    j->tablero[h + 1][g] == j->tablero[h + 2][g] &&
+			    j->tablero[h + 2][g] == j->tablero[h + 3][g]) {
+				/* Hay un ganador */
+				if (j->tablero[h][g] != 0) {
+					j->win = j->tablero[h][g];
+					j->win_col = g;
+					j->win_fila = h;
+					j->win_dir = 1;
+				}
+			}
+		}
+	}
+	
+	/* Buscar por filas */
+	for (g = 0; g < 4; g++) { /* Las 4 primeras columnas */
+		for (h = 0; h < 6; h++) { /* Las 6 filas */
+			if (j->tablero[h][g] == j->tablero[h][g + 1] &&
+			    j->tablero[h][g + 1] == j->tablero[h][g + 2] &&
+			    j->tablero[h][g + 2] == j->tablero[h][g + 3]) {
+				/* Hay un ganador */
+				if (j->tablero[h][g] != 0) {
+					j->win = j->tablero[h][g];
+					j->win_col = g;
+					j->win_fila = h;
+					j->win_dir = 3;
+				}
+			}
+		}
+	}
+	
+	/* Buscar por diagonales / */
+	for (g = 0; g < 4; g++) {
+		for (h = 3; h < 6; h++) {
+			if (j->tablero[h][g] == j->tablero[h - 1][g + 1] &&
+			    j->tablero[h - 1][g + 1] == j->tablero[h - 2][g + 2] &&
+			    j->tablero[h - 2][g + 2] == j->tablero[h - 3][g + 3]) {
+				if (j->tablero[h][g] != 0) {
+					j->win = j->tablero[h][g];
+					j->win_col = g;
+					j->win_fila = h;
+					j->win_dir = 2;
+				}
+			}
+		}
+	}
+	
+	/* Buscar por diagonales \ */
+	for (g = 0; g < 4; g++) {
+		for (h = 0; h < 3; h++) {
+			if (j->tablero[h][g] == j->tablero[h + 1][g + 1] &&
+			    j->tablero[h + 1][g + 1] == j->tablero[h + 2][g + 2] &&
+			    j->tablero[h + 2][g + 2] == j->tablero[h + 3][g + 3]) {
+				if (j->tablero[h][g] != 0) {
+					j->win = j->tablero[h][g];
+					j->win_col = g;
+					j->win_fila = h;
+					j->win_dir = 4;
+				}
+			}
+		}
+	}
+	
+	if (j->win != 0) {
+		printf ("Tenemos ganador %i!!!!!. Turno: %i, inicial: %i\n", j->win, j->turno, j->inicio);
+		
+		if ((j->win - 1) != j->inicio) {
+			printf ("Ellos ganaron, debemos enviar 64\n");
+		} else {
+			printf ("Nosotros ganamos, debemos enviar 65\n");
+		}
+		j->estado = NET_WAIT_WINNER;
+		if ((j->turno % 2) == j->inicio) {
+			printf ("Yo debo informar el gane al otro\n");
+			enviar_fin (j, NULL, ((j->win - 1) != j->inicio) ? NET_DISCONNECT_YOUWIN : NET_DISCONNECT_YOULOST);
+		}
+	}
 }
 
 int recibir_movimiento (Juego *j, int turno, int col, int fila, int *fin) {
