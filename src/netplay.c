@@ -330,7 +330,7 @@ void enviar_keep_alive (Juego *juego) {
 	
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	juego->buffer_send[2] = FLAG_ALV;
-	temp = htons (juego->seq++);
+	temp = htons (juego->seq);
 	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
 	temp = htons (juego->ack);
 	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
@@ -346,7 +346,7 @@ void enviar_keep_alive (Juego *juego) {
 void enviar_keep_alive_ack (Juego *juego, FF_NET *recv) {
 	uint16_t temp;
 	
-	juego->ack = recv->base.seq + 1;
+	juego->ack = recv->base.seq;
 	
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
 	juego->buffer_send[2] = FLAG_ALV | FLAG_ACK;

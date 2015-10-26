@@ -74,6 +74,11 @@ enum {
 	
 	IMG_LIST_BIG,
 	
+	IMG_WIN_1,
+	IMG_WIN_2,
+	IMG_WIN_3,
+	IMG_WIN_4,
+	
 	NUM_IMAGES
 };
 

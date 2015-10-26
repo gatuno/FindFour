@@ -102,7 +102,12 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/button-list-down.png",
 	
 	GAMEDATA_DIR "images/list-mini.png",
-	GAMEDATA_DIR "images/list-big.png"
+	GAMEDATA_DIR "images/list-big.png",
+	
+	GAMEDATA_DIR "images/win-1.png",
+	GAMEDATA_DIR "images/win-2.png",
+	GAMEDATA_DIR "images/win-3.png",
+	GAMEDATA_DIR "images/win-4.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -165,7 +170,7 @@ int game_loop (void) {
 	
 	primero = NULL;
 	ultimo = NULL;
-	Ventana *ventana;
+	Ventana *ventana, *next;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
 	
@@ -284,13 +289,17 @@ int game_loop (void) {
 					map = NULL;
 					x = event.button.x;
 					y = event.button.y;
-					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
+					
+					ventana = primero;
+					while (ventana != NULL && manejado == FALSE) {
+						next = ventana->next;
 						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 							if (ventana->mouse_up != NULL) {
 								manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y, &map);
 							}
 						}
+						ventana = next;
 					}
 					
 					if (map == NULL) {

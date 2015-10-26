@@ -213,7 +213,8 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			if (j->estado != NET_CLOSED) {
 				enviar_fin (j, NULL, NET_USER_QUIT);
 			} else {
-				/* Quitar esta ventana sin enviar fin */
+				eliminar_juego (j);
+				return TRUE;
 			}
 		}
 	}
@@ -256,7 +257,7 @@ void buscar_ganador (Juego *j) {
 				if (j->tablero[h][g] != 0) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
-					j->win_fila = h;
+					j->win_fila = 5 - h;
 					j->win_dir = 1;
 				}
 			}
@@ -273,7 +274,7 @@ void buscar_ganador (Juego *j) {
 				if (j->tablero[h][g] != 0) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
-					j->win_fila = h;
+					j->win_fila = 5 - h;
 					j->win_dir = 3;
 				}
 			}
@@ -289,7 +290,8 @@ void buscar_ganador (Juego *j) {
 				if (j->tablero[h][g] != 0) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
-					j->win_fila = h;
+					j->win_fila = 5 - h;
+					printf ("// Ganador de búsqueda: col %i, %i\n", g, h);
 					j->win_dir = 2;
 				}
 			}
@@ -305,7 +307,8 @@ void buscar_ganador (Juego *j) {
 				if (j->tablero[h][g] != 0) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
-					j->win_fila = h;
+					j->win_fila = 5 - h;
+					printf ("\\\\ Ganador de búsqueda: col %i, %i\n", g, h);
 					j->win_dir = 4;
 				}
 			}
@@ -314,7 +317,7 @@ void buscar_ganador (Juego *j) {
 	
 	if (j->win != 0) {
 		printf ("Tenemos ganador %i!!!!!. Turno: %i, inicial: %i\n", j->win, j->turno, j->inicio);
-		
+		printf ("Col: %i, Fila: %i\n", j->win_col, j->win_fila);
 		if ((j->win - 1) != j->inicio) {
 			printf ("Ellos ganaron, debemos enviar 64\n");
 		} else {
@@ -438,6 +441,46 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
 		} else {
 			SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
+		}
+	}
+	
+	if (j->win != 0) {
+		switch (j->win_dir) {
+			case 1:
+				rect.w = images[IMG_WIN_1]->w;
+				rect.h = images[IMG_WIN_1]->h;
+				rect.x = j->ventana.x + 28 + (j->win_col * 24);
+				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				
+				SDL_BlitSurface (images[IMG_WIN_1], NULL, screen, &rect);
+				
+				break;
+			case 3:
+				rect.w = images[IMG_WIN_3]->w;
+				rect.h = images[IMG_WIN_3]->h;
+				rect.x = j->ventana.x + 28 + (j->win_col * 24);
+				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				
+				SDL_BlitSurface (images[IMG_WIN_3], NULL, screen, &rect);
+				break;
+			case 2:
+				/* Estas diagonales apuntan a la esquina inferior izquierda */
+				rect.w = images[IMG_WIN_2]->w;
+				rect.h = images[IMG_WIN_2]->h;
+				rect.x = j->ventana.x + 28 + (j->win_col * 24);
+				rect.y = j->ventana.y + 65 + ((5 - j->win_fila + 3) * 24);
+				
+				SDL_BlitSurface (images[IMG_WIN_2], NULL, screen, &rect);
+				break;
+			case 4:
+				/* Esta digonal apunta a la esquina superior izquierda */
+				rect.w = images[IMG_WIN_4]->w;
+				rect.h = images[IMG_WIN_4]->h;
+				rect.x = j->ventana.x + 28 + (j->win_col * 24);
+				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				
+				SDL_BlitSurface (images[IMG_WIN_4], NULL, screen, &rect);
+				break;
 		}
 	}
 }
