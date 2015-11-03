@@ -152,5 +152,7 @@ void conectar_con_sockaddr (Juego *, const char *, struct sockaddr *, socklen_t)
 void enviar_movimiento (Juego *, int, int);
 void enviar_fin (Juego *, FF_NET *, int);
 
+void enviar_broadcast_game (char *nick);
+
 #endif /* __NETPLAY_H__ */
 

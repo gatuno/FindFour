@@ -76,10 +76,12 @@ void inicializar_chat (void) {
 	c->ventana.tipo = WINDOW_CHAT;
 	c->ventana.mostrar = TRUE;
 	
-	c->ventana.mouse_down = chat_mouse_down;
-	c->ventana.mouse_motion = chat_mouse_motion;
-	c->ventana.mouse_up = chat_mouse_up;
-	c->ventana.draw = chat_draw;
+	c->ventana.mouse_down = (FindWindowMouseFunc) chat_mouse_down;
+	c->ventana.mouse_motion = (FindWindowMouseFunc) chat_mouse_motion;
+	c->ventana.mouse_up = (FindWindowMouseFunc) chat_mouse_up;
+	c->ventana.draw = (FindWindowDraw) chat_draw;
+	c->ventana.key_down = NULL;
+	c->ventana.key_up = NULL;
 	
 	c->close_frame = IMG_BUTTON_CLOSE_UP;
 	c->up_frame = IMG_BUTTON_ARROW_1_UP;
@@ -254,7 +256,7 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 					}
 					Juego *j;
 					j = crear_juego ();
-					conectar_con_sockaddr (j, "Gatuno Cliente", (struct sockaddr *)&buddy->cliente, buddy->tamsock);
+					conectar_con_sockaddr (j, nick, (struct sockaddr *)&buddy->cliente, buddy->tamsock);
 				}
 				
 				/* Revisar otras listas */

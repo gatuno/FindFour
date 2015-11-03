@@ -37,6 +37,7 @@
 
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 
 /* Para el manejo de red */
 #include <sys/socket.h>
@@ -55,6 +56,7 @@
 #include "netplay.h"
 #include "cp-button.h"
 #include "chat.h"
+#include "inputbox.h"
 
 #define FPS (1000/24)
 
@@ -107,7 +109,13 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/win-1.png",
 	GAMEDATA_DIR "images/win-2.png",
 	GAMEDATA_DIR "images/win-3.png",
-	GAMEDATA_DIR "images/win-4.png"
+	GAMEDATA_DIR "images/win-4.png",
+	
+	GAMEDATA_DIR "images/window.png",
+	GAMEDATA_DIR "images/tab.png",
+	GAMEDATA_DIR "images/inputbox.png",
+	
+	GAMEDATA_DIR "images/chat.png"
 };
 
 /* TODO: Listar aquí los automátas */
@@ -132,10 +140,37 @@ Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
 
 int client_port, server_port;
+char nick[17];
+int nick_default;
+
+TTF_Font *ttf16_burbank_medium;
+
+void change_nick (Ventana *v, const char *texto) {
+	if (strcmp (texto, "") != 0) {
+		/* Copiar el texto a la variable de nick */
+		strncpy (nick, texto, 15);
+		
+		/* Reenviar el broadcast */
+		enviar_broadcast_game (nick);
+	}
+	
+	/* Eliminar esta ventana de texto */
+	eliminar_inputbox ((InputBox *) v);
+}
 
 int main (int argc, char *argv[]) {
+	int r;
+	
+	memset (nick, 0, sizeof (nick));
 	
 	setup ();
+	
+	/* Generar o leer el nick del archivo de configuración */
+	r = RANDOM (65536);
+	sprintf (nick, "Player%i\n", r);
+	
+	nick_default = 1;
+	
 	client_port = 3301;
 	server_port = 3300;
 	
@@ -184,6 +219,11 @@ int game_loop (void) {
 	
 	inicializar_chat ();
 	
+	if (nick_default) {
+		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick);
+	}
+	
+	SDL_EnableUNICODE (1);
 	do {
 		last_time = SDL_GetTicks ();
 		
@@ -193,13 +233,29 @@ int game_loop (void) {
 		while (SDL_PollEvent(&event) > 0) {
 			switch (event.type) {
 				case SDL_KEYDOWN:
-					if (event.key.keysym.sym == SDLK_n) {
-						/* Crear una nueva ventana y conectar */
-						ventana = (Ventana *) crear_juego ();
+					/* Encontrar la primer ventana no oculta para enviarle el evento */
+					manejado = FALSE;
+					ventana = primero;
+					
+					while (ventana != NULL && ventana->mostrar != TRUE) ventana = ventana->next;
+					
+					if (ventana != NULL) {
+						/* Revisar si le interesa nuestro evento */
+						if (ventana->key_down != NULL) {
+							manejado = ventana->key_down (ventana, &event.key);
+						}
+					}
+					
+					/* Si el evento aún no ha sido manejado por alguna ventana, es de nuestro interés */
+					if (!manejado) {
+						if (event.key.keysym.sym == SDLK_n) {
+							/* Crear una nueva ventana y conectar */
+							ventana = (Ventana *) crear_juego ();
 						
-						conectar_con ((Juego *) ventana, "Gatuno Cliente", "127.0.0.1", client_port);
-					} else if (event.key.keysym.sym == SDLK_c) {
-						show_chat ();
+							conectar_con ((Juego *) ventana, nick, "127.0.0.1", client_port);
+						} else if (event.key.keysym.sym == SDLK_F8) {
+							show_chat ();
+						}
 					}
 					break;
 				case SDL_MOUSEBUTTONDOWN:
@@ -327,6 +383,7 @@ int game_loop (void) {
 		if (now_time < last_time + FPS) SDL_Delay(last_time + FPS - now_time);
 		
 	} while (!done);
+	SDL_EnableUNICODE (0);
 	
 	findfour_netclose ();
 	
@@ -395,6 +452,26 @@ void setup (void) {
 		
 		images[g] = image;
 		/* TODO: Mostrar la carga de porcentaje */
+	}
+	
+	/* Cargar las tipografias */
+	if (TTF_Init () < 0) {
+		fprintf (stderr,
+			"Error: Can't initialize the SDL TTF library\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	ttf16_burbank_medium = TTF_OpenFont (GAMEDATA_DIR "burbankbm.ttf", 16);
+	
+	if (!ttf16_burbank_medium) {
+		fprintf (stderr,
+			"Failed to load font file 'Burbank Small Bold'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
 	}
 	
 	srand (SDL_GetTicks ());

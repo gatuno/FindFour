@@ -29,5 +29,10 @@ nobase_dist_gamedata_DATA = images/lodge.png \
 	images/win-2.png \
 	images/win-3.png \
 	images/win-4.png \
-	ccfacefront.ttf
+	images/window.png \
+	images/tab.png \
+	images/inputbox.png \
+	images/chat.png \
+	ccfacefront.ttf \
+	burbankbm.ttf
 

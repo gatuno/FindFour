@@ -52,10 +52,12 @@ Juego *crear_juego (void) {
 	j->ventana.tipo = WINDOW_GAME;
 	j->ventana.mostrar = TRUE;
 	
-	j->ventana.mouse_down = juego_mouse_down;
-	j->ventana.mouse_motion = juego_mouse_motion;
-	j->ventana.mouse_up = juego_mouse_up;
-	j->ventana.draw = juego_draw;
+	j->ventana.mouse_down = (FindWindowMouseFunc) juego_mouse_down;
+	j->ventana.mouse_motion = (FindWindowMouseFunc) juego_mouse_motion;
+	j->ventana.mouse_up = (FindWindowMouseFunc) juego_mouse_up;
+	j->ventana.draw = (FindWindowDraw) juego_draw;
+	j->ventana.key_down = NULL;
+	j->ventana.key_up = NULL;
 	
 	j->turno = 0;
 	j->win = 0;
@@ -83,7 +85,7 @@ Juego *crear_juego (void) {
 
 void eliminar_juego (Juego *j) {
 	/* Desligar completamente */
-	Ventana *v = (Ventana *) j;;
+	Ventana *v = (Ventana *) j;
 	if (v->prev != NULL) {
 		v->prev->next = v->next;
 	} else {
@@ -468,7 +470,7 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 				rect.w = images[IMG_WIN_2]->w;
 				rect.h = images[IMG_WIN_2]->h;
 				rect.x = j->ventana.x + 28 + (j->win_col * 24);
-				rect.y = j->ventana.y + 65 + ((5 - j->win_fila + 3) * 24);
+				rect.y = j->ventana.y + 65 + ((5 - j->win_fila - 3) * 24);
 				
 				SDL_BlitSurface (images[IMG_WIN_2], NULL, screen, &rect);
 				break;

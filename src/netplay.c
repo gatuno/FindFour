@@ -50,6 +50,9 @@ struct sockaddr_in6 mcast_addr6;
 
 Uint32 multicast_timer;
 
+/* Prototipos locales */
+void enviar_end_broadcast_game (void);
+
 int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
 	struct sockaddr_in6 *ipv6;
@@ -125,6 +128,7 @@ int findfour_netinit (int puerto) {
 		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
 	}
 	
+	enviar_broadcast_game (nick);
 	multicast_timer = SDL_GetTicks ();
 	
 	/* Ningún error */
@@ -747,7 +751,7 @@ void process_netevent (void) {
 	
 	/* Enviar el anuncio de juego multicast */
 	if (now_time > multicast_timer + NET_MCAST_TIMER) {
-		enviar_broadcast_game ("Multigame gat");
+		enviar_broadcast_game (nick);
 		multicast_timer = now_time;
 	}
 }

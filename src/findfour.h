@@ -22,6 +22,7 @@
 #define __FINDFOUR_H__
 
 #include <SDL.h>
+#include <SDL_ttf.h>
 
 #define NICK_SIZE 16
 
@@ -79,6 +80,12 @@ enum {
 	IMG_WIN_3,
 	IMG_WIN_4,
 	
+	IMG_WINDOW_PART,
+	IMG_WINDOW_TAB,
+	IMG_INPUT_BOX,
+	
+	IMG_CHAT_MINI,
+	
 	NUM_IMAGES
 };
 
@@ -86,10 +93,17 @@ enum {
 	WINDOW_GAME,
 	WINDOW_CHAT,
 	
+	WINDOW_INPUT,
+	
 	NUM_WINDOWS
 };
 
-typedef struct _Ventana {
+typedef struct _Ventana Ventana;
+typedef int (*FindWindowMouseFunc)(Ventana *, int, int, int **);
+typedef void (*FindWindowDraw)(Ventana *, SDL_Surface *);
+typedef int (*FindWindowKeyFunc)(Ventana *, SDL_KeyboardEvent *);
+
+struct _Ventana {
 	int tipo;
 	
 	/* Coordenadas de la ventana */
@@ -97,19 +111,24 @@ typedef struct _Ventana {
 	int w, h;
 	
 	/* Para la lista ligada */
-	struct _Ventana *prev, *next;
+	Ventana *prev, *next;
 	
 	int mostrar;
 	
 	/* Manejadores de la ventana */
-	int (*mouse_down)(struct _Ventana *, int, int, int **);
-	int (*mouse_motion)(struct _Ventana *, int, int, int **);
-	int (*mouse_up)(struct _Ventana *, int, int, int **);
-	void (*draw)(struct _Ventana *, SDL_Surface *);
-} Ventana;
+	FindWindowMouseFunc mouse_down;
+	FindWindowMouseFunc mouse_motion;
+	FindWindowMouseFunc mouse_up;
+	FindWindowDraw draw;
+	FindWindowKeyFunc key_down;
+	FindWindowKeyFunc key_up;
+};
 
 extern Ventana *primero, *ultimo;
 extern SDL_Surface * images [NUM_IMAGES];
+extern char nick[17];
+
+extern TTF_Font *ttf16_burbank_medium;
 
 void start_drag (Ventana *v, int offset_x, int offset_y);
 void stop_drag (Ventana *v);

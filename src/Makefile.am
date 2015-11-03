@@ -3,7 +3,7 @@
 gamedatadir = $(pkgdatadir)/data
 
 bin_PROGRAMS = findfour
-findfour_SOURCES = findfour.c findfour.h netplay.c netplay.h cp-button.c cp-button.h stun.c stun.h juego.c juego.h chat.c chat.h
+findfour_SOURCES = findfour.c findfour.h netplay.c netplay.h cp-button.c cp-button.h stun.c stun.h juego.c juego.h chat.c chat.h inputbox.c inputbox.h utf8.c utf8.h
 #EXTRA_DIST =
 
 findfour_CPPFLAGS = -DGAMEDATA_DIR=\"$(gamedatadir)/\" -DLOCALEDIR=\"$(localedir)\" $(AM_CPPFLAGS)
