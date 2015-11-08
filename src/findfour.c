@@ -140,7 +140,7 @@ Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
 
 int client_port, server_port;
-char nick[17];
+char nick_global[20];
 int nick_default;
 
 TTF_Font *ttf16_burbank_medium;
@@ -205,10 +205,10 @@ int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto)
 void change_nick (InputBox *ib, const char *texto) {
 	if (strcmp (texto, "") != 0) {
 		/* Copiar el texto a la variable de nick */
-		strncpy (nick, texto, 15);
+		strncpy (nick_global, texto, 15);
 		
 		/* Reenviar el broadcast */
-		enviar_broadcast_game (nick);
+		enviar_broadcast_game (nick_global);
 	}
 	
 	/* Eliminar esta ventana de texto */
@@ -228,7 +228,7 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 		/* Pasar a intentar hacer una conexión */
 		ventana = (Ventana *) crear_juego ();
 	
-		conectar_con ((Juego *) ventana, nick, hostname, puerto);
+		conectar_con ((Juego *) ventana, nick_global, hostname, puerto);
 	} else {
 		/* Mandar un mensaje de error */
 	}
@@ -242,13 +242,13 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 int main (int argc, char *argv[]) {
 	int r;
 	
-	memset (nick, 0, sizeof (nick));
+	memset (nick_global, 0, sizeof (nick_global));
 	
 	setup ();
 	
 	/* Generar o leer el nick del archivo de configuración */
 	r = RANDOM (65536);
-	sprintf (nick, "Player%i", r);
+	sprintf (nick_global, "Player%i", r);
 	
 	nick_default = 1;
 	
@@ -297,7 +297,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick);
+		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global);
 	}
 	
 	SDL_EnableUNICODE (1);

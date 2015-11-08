@@ -256,7 +256,7 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 					}
 					Juego *j;
 					j = crear_juego ();
-					conectar_con_sockaddr (j, nick, (struct sockaddr *)&buddy->cliente, buddy->tamsock);
+					conectar_con_sockaddr (j, nick_global, (struct sockaddr *)&buddy->cliente, buddy->tamsock);
 				}
 				
 				/* Revisar otras listas */
@@ -382,13 +382,26 @@ void show_chat (void) {
 void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock) {
 	BuddyMCast *nuevo;
 	char buffer[256];
+	SDL_Color blanco = {255, 255, 255};
 	
 	/* Buscar entre los buddys locales que no esté duplicado */
 	nuevo = static_chat->buddy_mcast;
 	
 	while (nuevo != NULL) {
 		if (sockaddr_cmp (direccion, (struct sockaddr *) &(nuevo->cliente)) == 0) {
-			/* TODO: En caso de coincidir, actualizar el nick */
+			SDL_FreeSurface (nuevo->nick_chat);
+			
+			/* Actualizar con el nuevo nombre */
+			strncpy (nuevo->nick, nick, NICK_SIZE);
+			if (direccion->sa_family == AF_INET) {
+				sprintf (buffer, "%s [IPv4]", nick);
+			} else if (direccion->sa_family == AF_INET6) {
+				sprintf (buffer, "%s [IPv6]", nick);
+			} else {
+				sprintf (buffer, "%s [???]", nick);
+			}
+			nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf_font, buffer, blanco);
+			
 			return;
 		}
 		nuevo = nuevo->next;
@@ -402,7 +415,6 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	strncpy (nuevo->nick, nick, NICK_SIZE);
 	memcpy (&(nuevo->cliente), direccion, tamsock);
 	nuevo->tamsock = tamsock;
-	SDL_Color blanco = {255, 255, 255};
 	
 	if (direccion->sa_family == AF_INET) {
 		sprintf (buffer, "%s [IPv4]", nick);

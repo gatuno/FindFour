@@ -59,7 +59,8 @@ int findfour_netinit (int puerto) {
 	struct sockaddr_in6 *ipv6;
 	struct ip_mreq mcast_req;
 	struct ipv6_mreq mcast_req6;
-	int g;
+	unsigned char g;
+	unsigned int h;
 	
 	printf ("Estoy a la escucha en el puerto: %i\n", puerto);
 	/* Crear, iniciar el socket */
@@ -91,12 +92,6 @@ int findfour_netinit (int puerto) {
 	try_stun_binding ("stun.ekiga.net", fd_socket);
 	
 	/* Hacer join a los grupos multicast */
-	g = 0;
-	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
-	
-	g = 1;
-	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
-	
 	/* Primero join al IPv4 */
 	mcast_addr.sin_family = AF_INET;
 	mcast_addr.sin_port = htons (puerto);
@@ -109,17 +104,16 @@ int findfour_netinit (int puerto) {
 		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
 	}
 	
+	g = 0;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
+	g = 1;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
+	
 	/* Intentar el join al grupo IPv6 */
 	mcast_addr6.sin6_family = AF_INET6;
 	mcast_addr6.sin6_port = htons (puerto);
 	mcast_addr6.sin6_flowinfo = 0;
 	mcast_addr6.sin6_scope_id = 0; /* Cualquier interfaz */
-	
-	g = 0;
-	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &g, sizeof (g));
-	
-	g = 64;
-	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &g, sizeof (g));
 	
 	inet_pton (AF_INET6, MULTICAST_IPV6_GROUP, &mcast_addr6.sin6_addr);
 	memcpy (&mcast_req6.ipv6mr_multiaddr, &(mcast_addr6.sin6_addr), sizeof (struct in6_addr));
@@ -129,7 +123,12 @@ int findfour_netinit (int puerto) {
 		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
 	}
 	
-	enviar_broadcast_game (nick);
+	h = 0;
+	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &h, sizeof (h));
+	h = 64;
+	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
+	
+	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
 	/* Ningún error */
@@ -660,6 +659,11 @@ void process_netevent (void) {
 				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
 				ventana->last_response = SDL_GetTicks ();
 				printf ("Una repetición de paquete, responderemos con el último paquete que nosotros enviamos\n");
+			} else if (netmsg.base.seq == (ventana->ack - 1)) {
+				manejado = TRUE;
+				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
+				ventana->last_response = SDL_GetTicks ();
+				printf ("Una repetición de paquete por su Seq, responderemos con el último paquete que nosotros enviamos\n");
 			}
 			
 			ventana = (Juego *) ventana->ventana.next;
@@ -676,9 +680,9 @@ void process_netevent (void) {
 				ventana->tamsock = tamsock;
 				ventana->estado = NET_SYN_RECV;
 				
-				enviar_syn_ack (ventana, &netmsg, "Gatuno Server");
+				enviar_syn_ack (ventana, &netmsg, nick_global);
 			} else {
-				printf ("Paquete desconocido\n");
+				printf ("Paquete Find Four fuera de orden\n");
 			}
 		}
 	} while (1);
@@ -765,7 +769,7 @@ void process_netevent (void) {
 	
 	/* Enviar el anuncio de juego multicast */
 	if (now_time > multicast_timer + NET_MCAST_TIMER) {
-		enviar_broadcast_game (nick);
+		enviar_broadcast_game (nick_global);
 		multicast_timer = now_time;
 	}
 }

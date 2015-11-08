@@ -78,7 +78,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) 
 		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, ask, blanco);
 	}
 	
-	ib->ventana.w = 144 + ((ib->text_ask->w / 16) + 1) * 16; /* FIXME: Arreglar esto */
+	ib->ventana.w = 144 + ((ib->text_ask->w / 16) + 1) * 16;
 	ib->callback = func;
 	
 	if (primero == NULL) {
@@ -458,7 +458,7 @@ int inputbox_key_down (InputBox *ib, SDL_KeyboardEvent *key) {
 	} else {
 		ib->text_s = NULL;
 	}
-	printf ("Ejecuto keydown, unicode: %hi. Cadena: \"%s\", len: %i\n", key->keysym.unicode, ib->buffer, strlen(ib->buffer));
+	//printf ("Ejecuto keydown, unicode: %hi. Cadena: \"%s\", len: %i\n", key->keysym.unicode, ib->buffer, strlen(ib->buffer));
 	return TRUE;
 }
 

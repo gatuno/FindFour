@@ -126,7 +126,7 @@ struct _Ventana {
 
 extern Ventana *primero, *ultimo;
 extern SDL_Surface * images [NUM_IMAGES];
-extern char nick[17];
+extern char nick_global[20];
 
 extern TTF_Font *ttf16_burbank_medium;
 
