@@ -40,9 +40,10 @@ struct _InputBox {
 	int box_y;
 	InputBoxFunc callback;
 	SDL_Surface *text_s;
+	SDL_Surface *text_ask;
 };
 
-InputBox *crear_inputbox (InputBoxFunc);
+InputBox *crear_inputbox (InputBoxFunc, const char *, const char *);
 void eliminar_inputbox (InputBox *ib);
 
 #endif /* __INPUTBOX_H__ */

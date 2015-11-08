@@ -69,6 +69,7 @@ Juego *crear_juego (void) {
 	
 	j->seq = j->ack = 0;
 	j->retry = 0;
+	j->estado = NET_CLOSED;
 	
 	/* Vaciar el tablero */
 	memset (j->tablero, 0, sizeof (int[6][7]));

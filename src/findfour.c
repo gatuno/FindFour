@@ -145,7 +145,64 @@ int nick_default;
 
 TTF_Font *ttf16_burbank_medium;
 
-void change_nick (Ventana *v, const char *texto) {
+int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto) {
+	char *p, *port, *invalid;
+	int g;
+	
+	if (cadena[0] == 0) {
+		hostname[0] = 0;
+		return FALSE;
+	}
+	
+	*puerto = 3300;
+	
+	if (cadena[0] == '[') {
+		/* Es una ip literal, buscar por otro ] de cierre */
+		p = strchr (cadena, ']');
+		
+		if (p == NULL) {
+			/* Error, no hay cierre */
+			hostname[0] = 0;
+			return FALSE;
+		}
+		strncpy (hostname, &cadena[1], p - cadena - 1);
+		hostname [p - cadena - 1] = 0;
+		p++;
+		cadena = p;
+	} else {
+		/* Nombre de host directo */
+		port = strchr (cadena, ':');
+		
+		if (port == NULL) {
+			/* No hay puerto, sólo host directo */
+			strcpy (hostname, cadena);
+			
+			return TRUE;
+		} else {
+			/* Copiar hasta antes del ":" */
+			strncpy (hostname, cadena, port - cadena);
+			hostname [port - cadena] = 0;
+		}
+		cadena = port;
+	}
+	
+	/* Buscar por un posible ":" */
+	if (cadena[0] == ':') {
+		g = strtol (&cadena[1], &invalid, 10);
+		
+		if (invalid[0] != 0 || g > 65535) {
+			/* Caracteres sobrantes */
+			hostname[0] = 0;
+			return FALSE;
+		}
+		
+		*puerto = g;
+	}
+	
+	return TRUE;
+}
+
+void change_nick (InputBox *ib, const char *texto) {
 	if (strcmp (texto, "") != 0) {
 		/* Copiar el texto a la variable de nick */
 		strncpy (nick, texto, 15);
@@ -155,7 +212,31 @@ void change_nick (Ventana *v, const char *texto) {
 	}
 	
 	/* Eliminar esta ventana de texto */
-	eliminar_inputbox ((InputBox *) v);
+	eliminar_inputbox (ib);
+}
+
+void nueva_conexion (InputBox *ib, const char *texto) {
+	int valido, puerto;
+	char *hostname;
+	Ventana *ventana;
+	
+	hostname = strdup (texto);
+	
+	valido = analizador_hostname_puerto (texto, hostname, &puerto);
+	
+	if (valido) {
+		/* Pasar a intentar hacer una conexión */
+		ventana = (Ventana *) crear_juego ();
+	
+		conectar_con ((Juego *) ventana, nick, hostname, puerto);
+	} else {
+		/* Mandar un mensaje de error */
+	}
+	
+	free (hostname);
+	
+	/* Eliminar esta ventana de texto */
+	eliminar_inputbox (ib);
 }
 
 int main (int argc, char *argv[]) {
@@ -167,19 +248,15 @@ int main (int argc, char *argv[]) {
 	
 	/* Generar o leer el nick del archivo de configuración */
 	r = RANDOM (65536);
-	sprintf (nick, "Player%i\n", r);
+	sprintf (nick, "Player%i", r);
 	
 	nick_default = 1;
 	
-	client_port = 3301;
 	server_port = 3300;
 	
 	if (argc > 2) {
-		client_port = atoi (argv[1]);
 		server_port = atoi (argv[2]);
 	}
-	
-	printf ("Puerto cliente: %i, conectar al puerto: %i\n", client_port, server_port);
 	
 	cp_button_start ();
 	do {
@@ -220,7 +297,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick);
+		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick);
 	}
 	
 	SDL_EnableUNICODE (1);
@@ -248,11 +325,8 @@ int game_loop (void) {
 					
 					/* Si el evento aún no ha sido manejado por alguna ventana, es de nuestro interés */
 					if (!manejado) {
-						if (event.key.keysym.sym == SDLK_n) {
-							/* Crear una nueva ventana y conectar */
-							ventana = (Ventana *) crear_juego ();
-						
-							conectar_con ((Juego *) ventana, nick, "127.0.0.1", client_port);
+						if (event.key.keysym.sym == SDLK_F5) {
+							ventana = (Ventana *) crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "");
 						} else if (event.key.keysym.sym == SDLK_F8) {
 							show_chat ();
 						}

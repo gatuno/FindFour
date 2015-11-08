@@ -36,8 +36,10 @@ int inputbox_mouse_up (InputBox *ib, int x, int y, int **button_map);
 void inputbox_draw (InputBox *ib, SDL_Surface *screen);
 int inputbox_key_down (InputBox *ib, SDL_KeyboardEvent *);
 
-InputBox *crear_inputbox (InputBoxFunc func) {
+InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) {
 	InputBox *ib;
+	SDL_Color blanco;
+	blanco.r = blanco.g = blanco.b = 255;
 	
 	ib = (InputBox *) malloc (sizeof (InputBox));
 	
@@ -45,7 +47,6 @@ InputBox *crear_inputbox (InputBoxFunc func) {
 	ib->ventana.next = primero;
 	/* Ancho mínimo 144, más múltiplos de 16 */
 	/* Alto mínimo 52, más múltiplos de 8 */
-	ib->ventana.w = 448; /* FIXME: Arreglar esto */
 	ib->ventana.h = 132;
 	ib->ventana.x = ib->ventana.y = 0;
 	
@@ -62,8 +63,22 @@ InputBox *crear_inputbox (InputBoxFunc func) {
 	ib->send_frame = IMG_BUTTON_LIST_UP;
 	ib->close_frame = IMG_BUTTON_CLOSE_UP;
 	ib->box_y = 80;
-	ib->text_s = NULL;
 	memset (ib->buffer, 0, sizeof (ib->buffer));
+	strncpy (ib->buffer, text, sizeof (ib->buffer));
+	
+	if (strcmp (ib->buffer, "") != 0) {
+		ib->text_s = TTF_RenderUTF8_Blended (ttf16_burbank_medium, ib->buffer, blanco);
+	} else {
+		ib->text_s = NULL;
+	}
+	
+	if (strcmp (ask, "") == 0) {
+		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, "(Sin texto)", blanco);
+	} else {
+		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, ask, blanco);
+	}
+	
+	ib->ventana.w = 144 + ((ib->text_ask->w / 16) + 1) * 16; /* FIXME: Arreglar esto */
 	ib->callback = func;
 	
 	if (primero == NULL) {
@@ -100,6 +115,8 @@ void eliminar_inputbox (InputBox *ib) {
 	}
 	
 	if (ib->text_s != NULL) SDL_FreeSurface (ib->text_s);
+	SDL_FreeSurface (ib->text_ask);
+	
 	stop_drag ((Ventana *) ib);
 	free (ib);
 }
@@ -364,9 +381,17 @@ void inputbox_draw (InputBox *ib, SDL_Surface *screen) {
 	
 	SDL_BlitSurface (images[IMG_CHAT_MINI], NULL, screen, &rect);
 	
+	/* Dibujar la pregunta de texto */
+	rect.x = ib->ventana.x + 26;
+	rect.y = ib->ventana.y + 42;
+	rect.w = ib->text_ask->w;
+	rect.h = ib->text_ask->h;
+	
+	SDL_BlitSurface (ib->text_ask, NULL, screen, &rect);
+	
 	/* Dibujar la cadena de texto */
 	if (ib->text_s != NULL) {
-		rect.x = ib->ventana.x + 22 + 14;
+		rect.x = ib->ventana.x + 36;
 		rect.y = ib->ventana.y + ib->box_y + 8;
 		rect.h = ib->text_s->h;
 		

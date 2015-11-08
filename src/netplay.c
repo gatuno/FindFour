@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 /* Para los sockets no-bloqueantes */
 #include <unistd.h>
@@ -146,8 +147,29 @@ void findfour_netclose (void) {
 
 void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
 	uint16_t temp;
+	int n;
+	struct addrinfo hints, *res;
+	char buffer_port[10];
 	
-	printf ("Conectando al puerto: %i\n", puerto);
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	
+	sprintf (buffer_port, "%i", puerto);
+	
+	/* Antes de intentar la conexión, hacer la resolución de nombres */
+	n = getaddrinfo (ip, buffer_port, &hints, &res);
+	
+	if (n < 0 || res == NULL) {
+		/* Lanzar mensaje de error */
+		eliminar_juego (juego);
+		return;
+	}
+	
+	/* Tomar y copiar el primer resultado */
+	memcpy (&juego->cliente, res->ai_addr, res->ai_addrlen);
+	
 	/* Generar un número de secuencia aleatorio */
 	while (juego->seq == 0) {
 		juego->seq = RANDOM (65535);
@@ -168,14 +190,6 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
 	juego->buffer_send[7 + NICK_SIZE] = '\0';
 	juego->len_send = 8 + NICK_SIZE;
-	
-	/* Para conectar, hay que convertir la ip a sockaddr 
-	 * FIXME: Hacer conversión con GetAddressInfo */
-	struct sockaddr_in *ipv4;
-	ipv4 = (struct sockaddr_in *) &juego->cliente;
-	ipv4->sin_family = AF_INET;
-	ipv4->sin_port = htons (puerto);
-	inet_pton (AF_INET, "127.0.0.1", &ipv4->sin_addr);
 	
 	juego->tamsock = sizeof (juego->cliente);
 	
@@ -369,7 +383,7 @@ void enviar_keep_alive_ack (Juego *juego, FF_NET *recv) {
 
 void enviar_fin (Juego *juego, FF_NET *recv, int razon) {
 	uint16_t temp;
-	
+	printf ("Razon para terminar: %i\n", razon);
 	if (recv != NULL) juego->ack = recv->base.seq + 1;
 	
 	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
