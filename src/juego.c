@@ -63,6 +63,7 @@ Juego *crear_juego (void) {
 	j->win = 0;
 	j->inicio = -1;
 	j->resalte = -1;
+	j->timer = 0;
 	j->close_frame = IMG_BUTTON_CLOSE_UP;
 	start += 20;
 	j->ventana.x = j->ventana.y = start;
@@ -73,6 +74,10 @@ Juego *crear_juego (void) {
 	
 	/* Vaciar el tablero */
 	memset (j->tablero, 0, sizeof (int[6][7]));
+	
+	/* Vaciar el nick del otro jugador */
+	memset (j->nick, 0, sizeof (j->nick));
+	j->nick_remoto_image = NULL;
 	
 	if (primero == NULL) {
 		primero = ultimo = (Ventana *) j;
@@ -107,6 +112,7 @@ void eliminar_juego (Juego *j) {
 		cp_last_button = NULL;
 	}
 	
+	if (j->nick_remoto_image != NULL) SDL_FreeSurface (j->nick_remoto_image);
 	stop_drag ((Ventana *) j);
 	free (j);
 }
@@ -212,7 +218,6 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 		*button_map = &(j->close_frame);
 		if (cp_button_up (*button_map)) {
 			/* Quitar esta ventana */
-			printf ("Me pidieron quitar esta ventana\n");
 			if (j->estado != NET_CLOSED) {
 				enviar_fin (j, NULL, NET_USER_QUIT);
 			} else {
@@ -322,14 +327,23 @@ void buscar_ganador (Juego *j) {
 		printf ("Tenemos ganador %i!!!!!. Turno: %i, inicial: %i\n", j->win, j->turno, j->inicio);
 		printf ("Col: %i, Fila: %i\n", j->win_col, j->win_fila);
 		if ((j->win - 1) != j->inicio) {
-			printf ("Ellos ganaron, debemos enviar 64\n");
+			printf ("Ellos ganaron\n");
 		} else {
-			printf ("Nosotros ganamos, debemos enviar 65\n");
+			printf ("Nosotros ganamos\n");
 		}
 		j->estado = NET_WAIT_WINNER;
 		if ((j->turno % 2) == j->inicio) {
 			printf ("Yo debo informar el gane al otro\n");
 			enviar_fin (j, NULL, ((j->win - 1) != j->inicio) ? NET_DISCONNECT_YOUWIN : NET_DISCONNECT_YOULOST);
+		}
+	}
+	if (j->turno == 42) {
+		/* Llegamos al tope del tablero, */
+		printf ("Tablero lleno\n");
+		j->estado = NET_WAIT_WINNER;
+		if ((j->turno % 2) == j->inicio) {
+			printf ("Yo le aviso\n");
+			enviar_fin (j, NULL, NET_DISCONNECT_TIE);
 		}
 	}
 }
@@ -367,7 +381,7 @@ int recibir_movimiento (Juego *j, int turno, int col, int fila, int *fin) {
 }
 
 void juego_draw (Juego *j, SDL_Surface *screen) {
-	SDL_Rect rect;
+	SDL_Rect rect, rect2;
 	int g, h;
 	
 	rect.x = j->ventana.x;
@@ -410,6 +424,78 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 	
 	SDL_BlitSurface (images[IMG_BOARD], NULL, screen, &rect);
 	
+	/* Los botones de carga */
+	if (j->estado == NET_SYN_SENT) {
+		rect.x = j->ventana.x + 39;
+		rect.y = j->ventana.y + 235;
+		rect.w = 32;
+		rect.h = 32;
+	
+		rect2.x = (j->timer % 19) * 32;
+		rect2.y = 0;
+		rect2.w = rect2.h = 32;
+	
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, screen, &rect);
+	
+		rect.x = j->ventana.x + 39;
+		rect.y = j->ventana.y + 265;
+		rect.w = 32;
+		rect.h = 32;
+	
+		rect2.x = (j->timer % 19) * 32;
+		rect2.y = 0;
+		rect2.w = rect2.h = 32;
+		
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, screen, &rect);
+	} else {
+		/* Dibujar las fichas de colores */
+		rect.x = j->ventana.x + 43;
+		rect.y = j->ventana.y + 239;
+		rect.w = images[IMG_COINRED]->w;
+		rect.h = images[IMG_COINRED]->h;
+		
+		if (j->inicio == 0) {
+			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+		}
+		
+		rect.x = j->ventana.x + 43;
+		rect.y = j->ventana.y + 269;
+		rect.w = images[IMG_COINRED]->w;
+		rect.h = images[IMG_COINRED]->h;
+		
+		if (j->inicio != 0) {
+			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+		}
+	}
+	
+	/* Dibujar el nombre del jugador local */
+	rect.x = j->ventana.x + 74;
+	rect.y = j->ventana.y + 242;
+	rect.w = nick_image->w;
+	rect.h = nick_image->h;
+	
+	SDL_BlitSurface (nick_image, NULL, screen, &rect);
+	
+	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
+	if (j->estado != NET_SYN_SENT) {
+		if (j->nick_remoto_image == NULL) {
+			printf ("Error!!!!!!. Estado = %i\n", j->estado);
+		}
+		rect.x = j->ventana.x + 74;
+		rect.y = j->ventana.y + 272;
+		rect.w = j->nick_remoto_image->w;
+		rect.h = j->nick_remoto_image->h;
+		
+		SDL_BlitSurface (j->nick_remoto_image, NULL, screen, &rect);
+	}
+	
+	j->timer++;
+	if (j->timer >= 19) j->timer = 0;
+	
 	if (j->resalte >= 0) {
 		/* Dibujar la ficha resaltada en la columna correspondiente */
 		rect.x = j->ventana.x;
@@ -439,7 +525,6 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		}
 		rect.w = images[IMG_BIGCOINRED]->w;
 		rect.h = images[IMG_BIGCOINRED]->h;
-		//printf ("Para hacer el resalte, turno: %i, Inicio: %i, Turno %% 2: %i\n", ventana->turno, ventana->inicio, (ventana->turno %2));
 		if (j->turno % 2 == 0) { /* El que empieza siempre es rojo */
 			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
 		} else {
@@ -486,4 +571,14 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 				break;
 		}
 	}
+}
+
+void recibir_nick (Juego *j, const char *nick) {
+	SDL_Color blanco;
+	
+	memcpy (j->nick, nick, sizeof (j->nick));
+	
+	/* Renderizar el nick del otro jugador */
+	blanco.r = blanco.g = blanco.b = 255;
+	j->nick_remoto_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, j->nick, blanco);
 }

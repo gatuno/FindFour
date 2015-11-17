@@ -25,6 +25,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#include "findfour.h"
 #include "chat.h"
 #include "cp-button.h"
 #include "netplay.h"
@@ -37,7 +38,6 @@ void chat_draw (Chat *j, SDL_Surface *screen);
 
 Uint32 azul1 = 0;
 static Chat *static_chat = NULL;
-TTF_Font *ttf_font;
 
 int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
 #define CMP(a, b) if (a != b) return a < b ? -1 : 1
@@ -109,9 +109,6 @@ void inicializar_chat (void) {
 	}
 	
 	static_chat = c;
-	/* Quitar esto */
-	TTF_Init ();
-	ttf_font = TTF_OpenFont (GAMEDATA_DIR "ccfacefront.ttf", 14);
 }
 
 int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
@@ -396,11 +393,15 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 			if (direccion->sa_family == AF_INET) {
 				sprintf (buffer, "%s [IPv4]", nick);
 			} else if (direccion->sa_family == AF_INET6) {
-				sprintf (buffer, "%s [IPv6]", nick);
+				if (IN6_IS_ADDR_V4MAPPED (&((struct sockaddr_in6 *)direccion)->sin6_addr)) {
+					sprintf (buffer, "%s [IPv4]", nick);
+				} else {
+					sprintf (buffer, "%s [IPv6]", nick);
+				}
 			} else {
 				sprintf (buffer, "%s [???]", nick);
 			}
-			nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf_font, buffer, blanco);
+			nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf14_facefront, buffer, blanco);
 			
 			return;
 		}
@@ -419,11 +420,15 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	if (direccion->sa_family == AF_INET) {
 		sprintf (buffer, "%s [IPv4]", nick);
 	} else if (direccion->sa_family == AF_INET6) {
-		sprintf (buffer, "%s [IPv6]", nick);
+		if (IN6_IS_ADDR_V4MAPPED (&((struct sockaddr_in6 *)direccion)->sin6_addr)) {
+			sprintf (buffer, "%s [IPv4]", nick);
+		} else {
+			sprintf (buffer, "%s [IPv6]", nick);
+		}
 	} else {
 		sprintf (buffer, "%s [???]", nick);
 	}
-	nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf_font, buffer, blanco);
+	nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf14_facefront, buffer, blanco);
 	
 	printf ("Posible partida de nombre: %s\n", nick);
 	static_chat->buddy_mcast_count++;

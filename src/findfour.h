@@ -71,6 +71,8 @@ enum {
 	IMG_BUTTON_LIST_OVER,
 	IMG_BUTTON_LIST_DOWN,
 	
+	IMG_LOADING,
+	
 	IMG_LIST_MINI,
 	
 	IMG_LIST_BIG,
@@ -126,9 +128,10 @@ struct _Ventana {
 
 extern Ventana *primero, *ultimo;
 extern SDL_Surface * images [NUM_IMAGES];
-extern char nick_global[20];
+extern char nick_global[NICK_SIZE];
+extern SDL_Surface *nick_image;
 
-extern TTF_Font *ttf16_burbank_medium;
+extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
 
 void start_drag (Ventana *v, int offset_x, int offset_y);
 void stop_drag (Ventana *v);

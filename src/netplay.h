@@ -26,7 +26,7 @@
 #include "findfour.h"
 #include "juego.h"
 
-#define NET_CONN_TIMER 1850
+#define NET_CONN_TIMER 3400
 #define NET_READY_TIMER 4950
 #define NET_MCAST_TIMER 12000
 
@@ -36,6 +36,16 @@
 #define FLAG_FIN 0x08
 #define FLAG_ALV 0x10
 #define FLAG_MCG 0x20
+
+#ifndef IN6_IS_ADDR_V4MAPPED
+#define IN6_IS_ADDR_V4MAPPED(a) \
+       ((((a)->s6_words[0]) == 0) && \
+        (((a)->s6_words[1]) == 0) && \
+        (((a)->s6_word[2]) == 0) && \
+        (((a)->s6_word[3]) == 0) && \
+        (((a)->s6_word[4]) == 0) && \
+        (((a)->s6_word[5]) == 0xFFFF))
+#endif
 
 typedef struct {
 	uint8_t flags;
@@ -138,7 +148,8 @@ enum {
 	NET_USER_QUIT, /* El usuario abandonó la partida */
 	
 	NET_DISCONNECT_YOUWIN = 64,
-	NET_DISCONNECT_YOULOST
+	NET_DISCONNECT_YOULOST,
+	NET_DISCONNECT_TIE
 };
 
 /* Funciones públicas */

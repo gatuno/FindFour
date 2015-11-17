@@ -26,6 +26,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#include <SDL.h>
+
 #include "findfour.h"
 
 /* Estructuras */
@@ -36,6 +38,7 @@ typedef struct _Juego {
 	int inicio;
 	int turno;
 	int resalte;
+	int timer;
 	
 	/* El tablero, 0 = nada, 1 = ficha roja, 2 = ficha azul */
 	int tablero[6][7];
@@ -49,6 +52,7 @@ typedef struct _Juego {
 	
 	/* El nick del otro jugador */
 	char nick[NICK_SIZE];
+	SDL_Surface *nick_remoto_image;
 	int win, win_col, win_fila, win_dir;
 	
 	/* Estado del protocolo de red */
@@ -65,6 +69,7 @@ Juego *crear_juego (void);
 void eliminar_juego (Juego *);
 int recibir_movimiento (Juego *, int turno, int col, int fila, int *);
 void buscar_ganador (Juego *j);
+void recibir_nick (Juego *, const char *);
 
 #endif /* __JUEGO_H__ */
 

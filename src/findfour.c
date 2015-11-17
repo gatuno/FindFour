@@ -57,6 +57,7 @@
 #include "cp-button.h"
 #include "chat.h"
 #include "inputbox.h"
+#include "utf8.h"
 
 #define FPS (1000/24)
 
@@ -103,6 +104,8 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/button-list-over.png",
 	GAMEDATA_DIR "images/button-list-down.png",
 	
+	GAMEDATA_DIR "images/loading.png",
+	
 	GAMEDATA_DIR "images/list-mini.png",
 	GAMEDATA_DIR "images/list-big.png",
 	
@@ -135,15 +138,17 @@ SDL_Surface * set_video_mode(unsigned);
 /* Variables globales */
 SDL_Surface * screen;
 SDL_Surface * images [NUM_IMAGES];
+SDL_Surface * text_waiting;
+SDL_Surface * nick_image = NULL;
 
 Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
 
 int client_port, server_port;
-char nick_global[20];
+char nick_global[NICK_SIZE];
 int nick_default;
 
-TTF_Font *ttf16_burbank_medium;
+TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
 
 int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto) {
 	char *p, *port, *invalid;
@@ -202,11 +207,41 @@ int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto)
 	return TRUE;
 }
 
+void render_nick (void) {
+	SDL_Color blanco;
+	
+	if (nick_image != NULL) SDL_FreeSurface (nick_image);
+	
+	blanco.r = blanco.g = blanco.b = 255;
+	nick_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, nick_global, blanco);
+}
+
 void change_nick (InputBox *ib, const char *texto) {
+	int len, g;
+	int chars;
 	if (strcmp (texto, "") != 0) {
-		/* Copiar el texto a la variable de nick */
-		strncpy (nick_global, texto, 15);
+		len = strlen (texto);
 		
+		if (len > 15) {
+			chars = 0;
+			while (chars < u8_strlen (texto)) {
+				if (u8_offset ((char *) texto, chars + 1) < 16) {
+					chars++;
+				} else {
+					break;
+				}
+			}
+			
+			len = u8_offset ((char *)texto, chars);
+		}
+		
+		/* Copiar el texto a la variable de nick */
+		strncpy (nick_global, texto, len);
+		for (g = len + 1; g < 16; g++) {
+			nick_global[g] = 0;
+		}
+		
+		render_nick ();
 		/* Reenviar el broadcast */
 		enviar_broadcast_game (nick_global);
 	}
@@ -249,6 +284,7 @@ int main (int argc, char *argv[]) {
 	/* Generar o leer el nick del archivo de configuración */
 	r = RANDOM (65536);
 	sprintf (nick_global, "Player%i", r);
+	render_nick ();
 	
 	nick_default = 1;
 	
@@ -489,6 +525,8 @@ SDL_Surface * set_video_mode (unsigned flags) {
 
 void setup (void) {
 	SDL_Surface * image;
+	TTF_Font *font;
+	SDL_Color blanco;
 	int g;
 	
 	/* Inicializar el Video SDL */
@@ -541,13 +579,47 @@ void setup (void) {
 	
 	if (!ttf16_burbank_medium) {
 		fprintf (stderr,
-			"Failed to load font file 'Burbank Small Bold'\n"
+			"Failed to load font file 'Burbank Medium Bold'\n"
 			"The error returned by SDL is:\n"
 			"%s\n", TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
 	
+	ttf14_facefront = TTF_OpenFont (GAMEDATA_DIR "ccfacefront.ttf", 14);
+	if (!ttf14_facefront) {
+		fprintf (stderr,
+			"Failed to load font file 'CC Face Front'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	tt16_comiccrazy = TTF_OpenFont (GAMEDATA_DIR "comicrazy.ttf", 16);
+	if (!tt16_comiccrazy) {
+		fprintf (stderr,
+			"Failed to load font file 'Comic Crazy'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	font = TTF_OpenFont (GAMEDATA_DIR "burbankbm.ttf", 12);
+	if (!font) {
+		fprintf (stderr,
+			"Failed to load font file 'Burbank Medium Bold'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	blanco.r = blanco.g = blanco.b = 255;
+	text_waiting = TTF_RenderUTF8_Blended (font, "Waiting for player", blanco);
+	
+	TTF_CloseFont (font);
 	srand (SDL_GetTicks ());
 }
 
