@@ -99,13 +99,14 @@ void inicializar_chat (void) {
 	c->list_offset = 0;
 	
 	c->ventana.prev = NULL;
-	c->ventana.next = primero;
+	c->ventana.next = get_first_window ();
 	
-	if (primero == NULL) {
-		primero = ultimo = (Ventana *) c;
+	if (get_first_window () == NULL) {
+		set_first_window ((Ventana *) c);
+		set_last_window ((Ventana *) c);
 	} else {
-		primero->prev = (Ventana *) c;
-		primero = (Ventana *) c;
+		get_first_window ()->prev = (Ventana *) c;
+		set_first_window ((Ventana *) c);
 	}
 	
 	static_chat = c;

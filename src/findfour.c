@@ -141,14 +141,26 @@ SDL_Surface * images [NUM_IMAGES];
 SDL_Surface * text_waiting;
 SDL_Surface * nick_image = NULL;
 
-Ventana *primero, *ultimo, *drag;
+static Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
 
-int client_port, server_port;
+int server_port;
 char nick_global[NICK_SIZE];
-int nick_default;
+static int nick_default;
 
 TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
+
+Ventana *get_first_window (void) {
+	return primero;
+}
+
+void set_first_window (Ventana *v) {
+	primero = v;
+}
+
+void set_last_window (Ventana *v) {
+	ultimo = v;
+}
 
 int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto) {
 	char *p, *port, *invalid;
@@ -224,7 +236,7 @@ void change_nick (InputBox *ib, const char *texto) {
 		
 		if (len > 15) {
 			chars = 0;
-			while (chars < u8_strlen (texto)) {
+			while (chars < u8_strlen ((char *)texto)) {
 				if (u8_offset ((char *) texto, chars + 1) < 16) {
 					chars++;
 				} else {
@@ -236,8 +248,8 @@ void change_nick (InputBox *ib, const char *texto) {
 		}
 		
 		/* Copiar el texto a la variable de nick */
-		strncpy (nick_global, texto, len);
-		for (g = len + 1; g < 16; g++) {
+		strncpy (nick_global, texto, len + 1);
+		for (g = len; g < 16; g++) {
 			nick_global[g] = 0;
 		}
 		
@@ -290,8 +302,8 @@ int main (int argc, char *argv[]) {
 	
 	server_port = 3300;
 	
-	if (argc > 2) {
-		server_port = atoi (argv[2]);
+	if (argc > 1) {
+		server_port = atoi (argv[1]);
 	}
 	
 	cp_button_start ();

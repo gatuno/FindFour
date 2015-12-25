@@ -126,12 +126,15 @@ struct _Ventana {
 	FindWindowKeyFunc key_up;
 };
 
-extern Ventana *primero, *ultimo;
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image;
 
 extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
+
+Ventana *get_first_window (void);
+void set_first_window (Ventana *v);
+void set_last_window (Ventana *v);
 
 void start_drag (Ventana *v, int offset_x, int offset_y);
 void stop_drag (Ventana *v);

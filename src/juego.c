@@ -45,7 +45,7 @@ Juego *crear_juego (void) {
 	j = (Juego *) malloc (sizeof (Juego));
 	
 	j->ventana.prev = NULL;
-	j->ventana.next = primero;
+	j->ventana.next = get_first_window ();
 	j->ventana.w = 232; /* FIXME: Arreglar esto */
 	j->ventana.h = 324;
 	
@@ -79,12 +79,13 @@ Juego *crear_juego (void) {
 	memset (j->nick, 0, sizeof (j->nick));
 	j->nick_remoto_image = NULL;
 	
-	if (primero == NULL) {
-		primero = ultimo = (Ventana *) j;
+	if (get_first_window () == NULL) {
+		set_last_window ((Ventana *) j);
 	} else {
-		primero->prev = (Ventana *) j;
-		primero = (Ventana *) j;
+		get_first_window ()->prev = (Ventana *) j;
 	}
+	
+	set_first_window ((Ventana *) j);
 	
 	return j;
 }
@@ -95,13 +96,13 @@ void eliminar_juego (Juego *j) {
 	if (v->prev != NULL) {
 		v->prev->next = v->next;
 	} else {
-		primero = v->next;
+		set_first_window (v->next);
 	}
 	
 	if (v->next != NULL) {
 		v->next->prev = v->prev;
 	} else {
-		ultimo = v->prev;
+		set_last_window (v->prev);
 	}
 	
 	/* Si hay algún indicativo a estos viejos botones, eliminarlo */

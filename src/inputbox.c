@@ -44,7 +44,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) 
 	ib = (InputBox *) malloc (sizeof (InputBox));
 	
 	ib->ventana.prev = NULL;
-	ib->ventana.next = primero;
+	ib->ventana.next = get_first_window ();
 	/* Ancho mínimo 144, más múltiplos de 16 */
 	/* Alto mínimo 52, más múltiplos de 8 */
 	ib->ventana.h = 132;
@@ -81,11 +81,12 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) 
 	ib->ventana.w = 144 + ((ib->text_ask->w / 16) + 1) * 16;
 	ib->callback = func;
 	
-	if (primero == NULL) {
-		primero = ultimo = (Ventana *) ib;
+	if (get_first_window () == NULL) {
+		set_first_window ((Ventana *) ib);
+		set_last_window ((Ventana *) ib);
 	} else {
-		primero->prev = (Ventana *) ib;
-		primero = (Ventana *) ib;
+		get_first_window ()->prev = (Ventana *) ib;
+		set_first_window ((Ventana *) ib);
 	}
 	
 	return ib;
@@ -97,13 +98,13 @@ void eliminar_inputbox (InputBox *ib) {
 	if (v->prev != NULL) {
 		v->prev->next = v->next;
 	} else {
-		primero = v->next;
+		set_first_window (v->next);
 	}
 	
 	if (v->next != NULL) {
 		v->next->prev = v->prev;
 	} else {
-		ultimo = v->prev;
+		set_last_window (v->prev);
 	}
 	
 	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
