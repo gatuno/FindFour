@@ -46,12 +46,12 @@ typedef struct _Juego {
 	/* El botón de cierre */
 	int close_frame; /* ¿El refresh es necesario? */
 	
-	/* La dirección del cliente */
-	struct sockaddr_storage cliente;
-	socklen_t tamsock;
+	/* La dirección del otro peer */
+	struct sockaddr_storage peer;
+	socklen_t peer_socklen;
 	
 	/* El nick del otro jugador */
-	char nick[NICK_SIZE];
+	char nick_remoto[NICK_SIZE];
 	SDL_Surface *nick_remoto_image;
 	int win, win_col, win_fila, win_dir;
 	
@@ -59,15 +59,14 @@ typedef struct _Juego {
 	int estado;
 	int retry;
 	Uint32 last_response;
-	uint16_t seq, ack;
-	char buffer_send[256];
-	size_t len_send;
+	uint16_t local, remote;
+	int last_fila, last_col, last_fin;
 } Juego;
 
 /* Funciones públicas */
 Juego *crear_juego (void);
 void eliminar_juego (Juego *);
-int recibir_movimiento (Juego *, int turno, int col, int fila, int *);
+void recibir_movimiento (Juego *, int turno, int col, int fila);
 void buscar_ganador (Juego *j);
 void recibir_nick (Juego *, const char *);
 

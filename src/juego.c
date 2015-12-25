@@ -40,6 +40,8 @@ const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 Juego *crear_juego (void) {
 	Juego *j;
 	static int start = 0;
+	Juego *lista;
+	int correct;
 	
 	/* Crear una nueva ventana */
 	j = (Juego *) malloc (sizeof (Juego));
@@ -68,7 +70,7 @@ Juego *crear_juego (void) {
 	start += 20;
 	j->ventana.x = j->ventana.y = start;
 	
-	j->seq = j->ack = 0;
+	j->local = j->remote = 0;
 	j->retry = 0;
 	j->estado = NET_CLOSED;
 	
@@ -76,7 +78,7 @@ Juego *crear_juego (void) {
 	memset (j->tablero, 0, sizeof (int[6][7]));
 	
 	/* Vaciar el nick del otro jugador */
-	memset (j->nick, 0, sizeof (j->nick));
+	memset (j->nick_remoto, 0, sizeof (j->nick_remoto));
 	j->nick_remoto_image = NULL;
 	
 	if (get_first_window () == NULL) {
@@ -86,6 +88,22 @@ Juego *crear_juego (void) {
 	}
 	
 	set_first_window ((Ventana *) j);
+	
+	/* Generar un número local aleatorio */
+	do {
+		correct = 0;
+		j->local = 1 + RANDOM (65534);
+		
+		lista = (Juego *) get_first_window ();
+		while (lista != NULL) {
+			if (lista->ventana.tipo != WINDOW_GAME || lista == j) {
+				lista = (Juego *) lista->ventana.next;
+				continue;
+			}
+			if (lista->local == j->local) correct = 1;
+			lista = (Juego *) lista->ventana.next;
+		}
+	} while (correct);
 	
 	return j;
 }
@@ -208,8 +226,19 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			j->tablero[g][h] = (j->turno % 2) + 1;
 			
 			/* Enviar el turno */
-			enviar_movimiento (j, h, g);
+			j->retry = 0;
+			enviar_movimiento (j, j->turno, h, g);
+			j->last_col = h;
+			j->last_fila = g;
+			j->turno++;
 			j->resalte = -1;
+			
+			/* Si es un movimiento ganador, cambiar el estado a WAIT_WINNER */
+			buscar_ganador (j);
+			
+			if (j->win != 0 || j->turno == 42) {
+				j->estado = NET_WAIT_WINNER;
+			}
 		}
 	}
 	
@@ -220,7 +249,9 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 		if (cp_button_up (*button_map)) {
 			/* Quitar esta ventana */
 			if (j->estado != NET_CLOSED) {
-				enviar_fin (j, NULL, NET_USER_QUIT);
+				j->last_fin = NET_USER_QUIT;
+				j->retry = 0;
+				enviar_fin (j);
 			} else {
 				eliminar_juego (j);
 				return TRUE;
@@ -323,47 +354,37 @@ void buscar_ganador (Juego *j) {
 			}
 		}
 	}
-	
-	if (j->win != 0) {
-		printf ("Tenemos ganador %i!!!!!. Turno: %i, inicial: %i\n", j->win, j->turno, j->inicio);
-		printf ("Col: %i, Fila: %i\n", j->win_col, j->win_fila);
-		if ((j->win - 1) != j->inicio) {
-			printf ("Ellos ganaron\n");
-		} else {
-			printf ("Nosotros ganamos\n");
-		}
-		j->estado = NET_WAIT_WINNER;
-		if ((j->turno % 2) == j->inicio) {
-			printf ("Yo debo informar el gane al otro\n");
-			enviar_fin (j, NULL, ((j->win - 1) != j->inicio) ? NET_DISCONNECT_YOUWIN : NET_DISCONNECT_YOULOST);
-		}
-	}
-	if (j->turno == 42) {
-		/* Llegamos al tope del tablero, */
-		printf ("Tablero lleno\n");
-		j->estado = NET_WAIT_WINNER;
-		if ((j->turno % 2) == j->inicio) {
-			printf ("Yo le aviso\n");
-			enviar_fin (j, NULL, NET_DISCONNECT_TIE);
-		}
-	}
 }
 
-int recibir_movimiento (Juego *j, int turno, int col, int fila, int *fin) {
+void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 	int g;
 	if (j->turno != turno) {
-		printf ("Número de turno equivocado\n");
-		*fin = NET_DISCONNECT_WRONG_TURN;
-		return -1;
+		/* TODO: Si el turno es 1 menor, es una repetición */
+		if (turno == j->turno - 1) {
+			/* Buscar un ganador, si lo hay, enviar el ACK_GAME */
+			if (j->win != 0) {
+				enviar_mov_ack_finish (j, GAME_FINISH_LOST);
+				j->estado = NET_CLOSED;
+			} else if (j->turno == 42) {
+				enviar_mov_ack_finish (j, GAME_FINISH_TIE);
+				j->estado = NET_CLOSED;
+			} else {
+				enviar_mov_ack (j);
+			}
+		} else {
+			printf ("Número de turno equivocado\n");
+			j->last_fin = NET_DISCONNECT_WRONG_TURN;
+			enviar_fin (j);
+		}
 	} else if (j->turno % 2 == j->inicio) {
 		printf ("Es nuestro turno, cerrar esta conexión\n");
-		*fin = NET_DISCONNECT_WRONG_TURN;
-		return -1;
+		j->last_fin = NET_DISCONNECT_WRONG_TURN;
+		enviar_fin (j);
 	} else if (j->tablero[0][col] != 0) {
 		/* Tablero lleno, columna equivocada */
 		printf ("Columna llena, no deberias poner fichas ahí\n");
-		*fin = NET_DISCONNECT_WRONG_MOV;
-		return -1;
+		j->last_fin = NET_DISCONNECT_WRONG_MOV;
+		enviar_fin (j);
 	} else {
 		g = 5;
 		while (g > 0 && j->tablero[g][col] != 0) g--;
@@ -371,12 +392,24 @@ int recibir_movimiento (Juego *j, int turno, int col, int fila, int *fin) {
 		/* Poner la ficha en la posición [g][turno] y avanzar turno */
 		if (g != fila) {
 			printf ("La ficha de mi lado cayó en la fila incorrecta\n");
-			*fin = NET_DISCONNECT_WRONG_MOV;
-			return -1;
+			j->last_fin = NET_DISCONNECT_WRONG_MOV;
+			enviar_fin (j);
 		} else {
 			j->tablero[g][col] = (j->turno % 2) + 1;
 			j->turno++;
-			return 0;
+			
+			buscar_ganador (j);
+			
+			/* Buscar un ganador, si lo hay, enviar el ACK_GAME */
+			if (j->win != 0) {
+				enviar_mov_ack_finish (j, GAME_FINISH_LOST);
+				j->estado = NET_CLOSED;
+			} else if (j->turno == 42) {
+				enviar_mov_ack_finish (j, GAME_FINISH_TIE);
+				j->estado = NET_CLOSED;
+			} else {
+				enviar_mov_ack (j);
+			}
 		}
 	}
 }
@@ -577,9 +610,9 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 void recibir_nick (Juego *j, const char *nick) {
 	SDL_Color blanco;
 	
-	memcpy (j->nick, nick, sizeof (j->nick));
+	memcpy (j->nick_remoto, nick, sizeof (j->nick_remoto));
 	
 	/* Renderizar el nick del otro jugador */
 	blanco.r = blanco.g = blanco.b = 255;
-	j->nick_remoto_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, j->nick, blanco);
+	j->nick_remoto_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, j->nick_remoto, blanco);
 }

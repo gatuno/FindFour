@@ -51,8 +51,34 @@ struct sockaddr_in6 mcast_addr6;
 
 Uint32 multicast_timer;
 
-/* Prototipos locales */
-void enviar_end_broadcast_game (void);
+void conectar_juego (Juego *juego, const char *nick);
+
+/* Función de Kazuho Oku
+ * https://gist.github.com/kazuho/45eae4f92257daceb73e
+ */
+int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
+#define CMP(a, b) if (a != b) return a < b ? -1 : 1
+
+	CMP(x->sa_family, y->sa_family);
+
+	if (x->sa_family == AF_INET) {
+		struct sockaddr_in *xin = (void*)x, *yin = (void*)y;
+		CMP(ntohl(xin->sin_addr.s_addr), ntohl(yin->sin_addr.s_addr));
+		CMP(ntohs(xin->sin_port), ntohs(yin->sin_port));
+	} else if (x->sa_family == AF_INET6) {
+		struct sockaddr_in6 *xin6 = (void*)x, *yin6 = (void*)y;
+		int r = memcmp (xin6->sin6_addr.s6_addr, yin6->sin6_addr.s6_addr, sizeof(xin6->sin6_addr.s6_addr));
+		if (r != 0) return r;
+		CMP(ntohs(xin6->sin6_port), ntohs(yin6->sin6_port));
+		CMP(xin6->sin6_flowinfo, yin6->sin6_flowinfo);
+		CMP(xin6->sin6_scope_id, yin6->sin6_scope_id);
+	} else {
+		return -1; /* Familia desconocida */
+	}
+
+#undef CMP
+	return 0;
+}
 
 int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
@@ -127,7 +153,7 @@ int findfour_netinit (int puerto) {
 	h = 64;
 	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
 	
-	enviar_broadcast_game (nick_global);
+	//enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
 	/* Ningún error */
@@ -137,14 +163,13 @@ int findfour_netinit (int puerto) {
 void findfour_netclose (void) {
 	/* Enviar el multicast de retiro de partida */
 	
-	enviar_end_broadcast_game ();
+	//enviar_end_broadcast_game ();
 	/* Y cerrar el socket */
 	
 	close (fd_socket);
 }
 
 void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
-	uint16_t temp;
 	int n;
 	struct addrinfo hints, *res;
 	char buffer_port[10];
@@ -166,514 +191,342 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	}
 	
 	/* Tomar y copiar el primer resultado */
-	memcpy (&juego->cliente, res->ai_addr, res->ai_addrlen);
+	memcpy (&juego->peer, res->ai_addr, res->ai_addrlen);
+	juego->peer_socklen = res->ai_addrlen;
 	
-	/* Generar un número de secuencia aleatorio */
-	while (juego->seq == 0) {
-		juego->seq = RANDOM (65535);
-	}
+	conectar_juego (juego, nick);
+}
+
+
+void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen) {
+	memcpy (&juego->peer, peer, peer_socklen);
+	juego->peer_socklen = peer_socklen;
+	
+	conectar_juego (juego, nick);
+}
+
+void conectar_juego (Juego *juego, const char *nick) {
+	char buffer_send[128];
+	uint16_t temp;
 	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Rellenar los bytes */
-	juego->buffer_send[2] = FLAG_SYN;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = 0; /* Ack 0 inicial */
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	juego->buffer_send[7] = 1; /* Versión del protocolo */
-	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
-	juego->buffer_send[7 + NICK_SIZE] = '\0';
-	juego->len_send = 8 + NICK_SIZE;
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	juego->tamsock = sizeof (juego->cliente);
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_SYN;
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	/* Número local */
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	/* Número remoto */
+	buffer_send[6] = buffer_send[7] = 0;
+	
+	/* El nick local */
+	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	buffer_send[7 + NICK_SIZE] = '\0';
+	
+	/* Sortear el turno inicial */
+	juego->inicio = RANDOM(2);
+	buffer_send[8 + NICK_SIZE] = (juego->inicio == 1 ? 255 : 0);
+	
+	sendto (fd_socket, buffer_send, 9 + NICK_SIZE, 0, (struct sockaddr *) &juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un SYN inicial. Mi seq: %i\n", juego->seq);
+	
+	printf ("Envié un SYN inicial. Mi local port: %i\n", juego->local);
 	juego->estado = NET_SYN_SENT;
 }
 
-void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *destino, socklen_t tamsock) {
+void enviar_res_syn (Juego *juego, const char *nick) {
+	char buffer_send[128];
 	uint16_t temp;
-	
-	/* Generar un número de secuencia aleatorio */
-	while (juego->seq == 0) {
-		juego->seq = RANDOM (65535);
-	}
-	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Rellenar los bytes */
-	juego->buffer_send[2] = FLAG_SYN;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = 0; /* Ack 0 inicial */
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	juego->buffer_send[7] = 1; /* Versión del protocolo */
-	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
-	juego->buffer_send[7 + NICK_SIZE] = '\0';
-	juego->len_send = 8 + NICK_SIZE;
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	/* Copiar el sockaddr */
-	memcpy (&juego->cliente, destino, tamsock);
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_RES_SYN;
 	
-	juego->tamsock = tamsock;
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
 	
+	/* El nick local */
+	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	buffer_send[7 + NICK_SIZE] = '\0';
+	
+	sendto (fd_socket, buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un SYN inicial. Mi seq: %i\n", juego->seq);
-	juego->estado = NET_SYN_SENT;
+	
+	printf ("Envie un RES_SYN. Estoy listo para jugar. Mi local prot: %i\n", juego->local);
+	
+	juego->estado = NET_READY;
 }
 
-void enviar_syn_ack (Juego *juego, FF_NET *recv, const char *nick) {
+void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
+	char buffer_send[128];
 	uint16_t temp;
-	
-	juego->ack = recv->base.seq + 1;
-	while (juego->seq == 0) {
-		juego->seq = RANDOM (65535);
-	}
-	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Sortear quién empieza primero */
-	juego->inicio = RANDOM (2);
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	/* Rellenar los bytes */
-	juego->buffer_send[2] = FLAG_SYN | FLAG_ACK;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	juego->buffer_send[7] = 1; /* Versión del protocolo */
-	strncpy (&juego->buffer_send[8], nick, sizeof (char) * NICK_SIZE);
-	juego->buffer_send[7 + NICK_SIZE] = '\0';
-	juego->buffer_send[8 + NICK_SIZE] = (juego->inicio == 0 ? 0 : 255);
-	juego->len_send = 9 + NICK_SIZE;
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_TRN;
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = turno;
+	buffer_send[9] = col;
+	buffer_send[10] = fila;
+	
+	sendto (fd_socket, buffer_send, 11, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un SYN + ACK. mi seq: %i, y el ack: %i\n", juego->seq, juego->ack);
+	
+	printf ("Envié un movimiento.\n");
+	
+	juego->estado = NET_WAIT_ACK;
 }
 
-void enviar_ack_0 (Juego *juego, FF_NET *recv) {
+void enviar_mov_ack (Juego *juego) {
+	char buffer_send[128];
 	uint16_t temp;
-	
-	juego->ack = recv->base.seq + 1;
-	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	juego->buffer_send[2] = FLAG_ACK;
-	temp = htons (juego->seq);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	juego->len_send = 7;
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_TRN_ACK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = juego->turno;
+	
+	sendto (fd_socket, buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un ACK. mi seq: %i, y el ack: %i\n", juego->seq, juego->ack);
+	
+	printf ("Envié una confirmación de movimiento.\n");
 }
 
-void enviar_movimiento (Juego *juego, int col, int fila) {
+void enviar_mov_ack_finish (Juego *juego, int reason) {
+	char buffer_send[128];
 	uint16_t temp;
-	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	juego->buffer_send[2] = FLAG_TRN;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	juego->buffer_send[7] = juego->turno++;
-	juego->buffer_send[8] = col;
-	juego->buffer_send[9] = fila;
-	juego->len_send = 10;
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_TRN_ACK_GAME;
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = juego->turno;
+	
+	buffer_send[9] = reason;
+	
+	sendto (fd_socket, buffer_send, 10, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un movimiento. Turno: %i, mi seq: %i y el ack: %i\n", juego->turno - 1, juego->seq, juego->ack);
-	juego->estado = NET_WAIT_TRN_ACK;
+	
+	printf ("Envié una confirmación de movimiento con ganador.\n");
 }
 
-void enviar_trn_ack (Juego *juego, FF_NET *recv) {
+void enviar_fin (Juego *juego) {
+	char buffer_send[128];
 	uint16_t temp;
-	
-	juego->ack = recv->base.seq + 1;
-	
 	/* Rellenar con la firma del protocolo FF */
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
+	buffer_send[0] = buffer_send[1] = 'F';
 	
-	juego->buffer_send[2] = FLAG_TRN | FLAG_ACK;
-	temp = htons (juego->seq);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
 	
-	juego->buffer_send[7] = juego->turno;
-	juego->len_send = 8;
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_FIN;
 	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = juego->last_fin;
+	
+	sendto (fd_socket, buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié mi confirmación de un movimiento. Turno: %i, mi seq: %i y el ack: %i\n", juego->turno - 1, juego->seq, juego->ack);
+	
+	printf ("Envié un petición de FIN.\n");
+	juego->estado = NET_WAIT_CLOSING;
 }
 
-void enviar_keep_alive (Juego *juego) {
+void enviar_fin_ack (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	/* Rellenar con la firma del protocolo FF */
+	buffer_send[0] = buffer_send[1] = 'F';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_FIN_ACK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	printf ("Envié una confirmación de FIN.\n");
+	juego->estado = NET_CLOSED;
+}
+
+int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	uint16_t temp;
 	
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
-	juego->buffer_send[2] = FLAG_ALV;
-	temp = htons (juego->seq);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
+	/* Vaciar la estructura */
+	memset (msg, 0, sizeof (FFMessageNet));
 	
-	juego->len_send = 7;
-	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
-	juego->last_response = SDL_GetTicks ();
-	//juego->retry = 0;
-}
-
-void enviar_keep_alive_ack (Juego *juego, FF_NET *recv) {
-	uint16_t temp;
-	
-	juego->ack = recv->base.seq;
-	
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
-	juego->buffer_send[2] = FLAG_ALV | FLAG_ACK;
-	temp = htons (juego->seq);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	
-	juego->len_send = 7;
-	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
-	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-}
-
-void enviar_fin (Juego *juego, FF_NET *recv, int razon) {
-	uint16_t temp;
-	printf ("Razon para terminar: %i\n", razon);
-	if (recv != NULL) juego->ack = recv->base.seq + 1;
-	
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
-	juego->buffer_send[2] = FLAG_FIN;
-	temp = htons (juego->seq++);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	
-	/* Empaquetar la razon de la desconexión */
-	juego->buffer_send[7] = razon;
-	
-	juego->len_send = 8;
-	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
-	
-	if (razon == NET_DISCONNECT_YOUWIN || razon == NET_DISCONNECT_YOULOST || razon == NET_DISCONNECT_TIE) {
-		juego->estado = NET_WAIT_WINNER_ACK;
-	} else {
-		juego->estado = NET_WAIT_CLOSING;
-		/* Ocultar la ventana */
-		juego->ventana.mostrar = FALSE;
-	}
-	
-	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un FIN. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
-}
-
-void enviar_fin_ack (Juego *juego, FF_NET *recv) {
-	uint16_t temp;
-	
-	juego->ack = recv->base.seq + 1;
-	
-	juego->buffer_send[0] = juego->buffer_send[1] = 'F';
-	juego->buffer_send[2] = FLAG_FIN | FLAG_ACK;
-	temp = htons (juego->seq);
-	memcpy (&juego->buffer_send[3], &temp, sizeof (temp));
-	temp = htons (juego->ack);
-	memcpy (&juego->buffer_send[5], &temp, sizeof (temp));
-	
-	juego->len_send = 7;
-	
-	sendto (fd_socket, juego->buffer_send, juego->len_send, 0, (struct sockaddr *) &juego->cliente, juego->tamsock);
-	
-	juego->last_response = SDL_GetTicks ();
-	juego->retry = 0;
-	printf ("Envié un FIN ACK. mi Seq: %i y el ack: %i\n", juego->seq, juego->ack);
-}
-
-void enviar_broadcast_game (char *nick) {
-	char buffer[32];
-	FF_broadcast_game bgame;
-	
-	buffer[0] = buffer[1] = 'F';
-	buffer[2] = FLAG_MCG;
-	
-	buffer[3] = 1; /* Versión del protocolo */
-	
-	strncpy (&(buffer[4]), nick, sizeof (char) * NICK_SIZE);
-	
-	buffer[4 + NICK_SIZE - 1] = '\0';
-	
-	/* Enviar a IPv4 y IPv6 */
-	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	
-	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
-}
-
-void enviar_end_broadcast_game (void) {
-	char buffer[4];
-	FF_broadcast_game bgame;
-	
-	buffer[0] = buffer[1] = 'F';
-	buffer[2] = FLAG_MCG | FLAG_FIN;
-	
-	/* Enviar a IPv4 y IPv6 */
-	sendto (fd_socket, buffer, 3, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	
-	sendto (fd_socket, buffer, 3, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
-}
-
-int unpack (FF_NET *net, char *buffer, size_t len) {
-	uint16_t temp;
-	memset (net, 0, sizeof (FF_NET));
-	
-	/* Mínimo son 7 bytes, firma del protocolo FF y Flags
-	 * Número de secuencia y número de ack */
-	if (len < 3) return -1;
+	if (len < 4) return -1;
 	
 	if (buffer[0] != 'F' || buffer[1] != 'F') {
-		printf ("Protocol Mismatch. Expecting Find Four (FF)\n");
+		printf ("Protocol Mismatch!\n");
 		
 		return -1;
 	}
 	
-	/* Las banderas son uint8, no tienen ningún problema */
-	net->base.flags = buffer[2];
-	
-	memcpy (&temp, &buffer[3], sizeof (temp));
-	net->base.seq = ntohs (temp);
-	memcpy (&temp, &buffer[5], sizeof (temp));
-	net->base.ack = ntohs (temp);
-	
-	if (net->base.flags & FLAG_SYN) {
-		/* Contiene el nick y la versión del protocolo */
-		net->syn.version = buffer[7];
-		strncpy (net->syn.nick, &buffer[8], sizeof (char) * NICK_SIZE);
+	if (buffer[2] != 2) {
+		printf ("Version mismatch. Expecting 2\n");
 		
-		if (net->base.flags & FLAG_ACK) {
-			/* Este paquete tiene adicionalmente turno inicial */
-			net->syn_ack.initial = buffer[8 + NICK_SIZE];
-		}
-	} else if (net->base.flags == FLAG_TRN) {
-		net->trn.turno = buffer[7];
-		net->trn.col = buffer[8];
-		net->trn.fila = buffer[9];
-	} else if (net->base.flags == FLAG_FIN) {
-		net->fin.fin = buffer[7];
-	} else if (net->base.flags == FLAG_MCG) {
-		net->bgame.version = buffer[3];
-		strncpy (net->bgame.nick, &buffer[4], sizeof (char) * NICK_SIZE);
+		return -1;
 	}
 	
-	/* Paquete completo */
+	msg->type = buffer[3];
+	
+	if (msg->type == TYPE_SYN) {
+		if (len < (9 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* No hay puerto remoto, aún */
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		
+		/* Copiar quién empieza */
+		msg->initial = buffer[8 + NICK_SIZE];
+	} else if (msg->type == TYPE_RES_SYN) {
+		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		
+		/* Copiar quién empieza */
+		msg->initial = buffer[8 + NICK_SIZE];
+	} else if (msg->type == TYPE_TRN) {
+		if (len < 11) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->turno = buffer[8];
+		msg->col = buffer[9];
+		msg->fila = buffer[10];
+	} else if (msg->type == TYPE_TRN_ACK) {
+		if (len < 9) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->turn_ack = buffer[8];
+	} else if (msg->type == TYPE_TRN_ACK_GAME) {
+		if (len < 10) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->turn_ack = buffer[8];
+		msg->win = buffer[9];
+	} else if (msg->type == TYPE_FIN) {
+		if (len < 9) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->fin = buffer[9];
+	} else if (msg->type == TYPE_FIN_ACK) {
+		if (len < 8) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+	}
+	
 	return 0;
 }
 
-void process_netevent (void) {
-	char buffer [256];
-	FF_NET netmsg;
-	Juego *ventana, *next;
-	struct sockaddr_storage cliente;
-	socklen_t tamsock;
-	int g;
-	int manejado;
-	int len;
+void check_for_retry (void) {
 	Uint32 now_time;
-	uint16_t temp;
+	Juego *ventana, *next;
 	
-	do {
-		tamsock = sizeof (cliente);
-		/* Intentar hacer otra lectura para procesamiento */
-		len = recvfrom (fd_socket, buffer, sizeof (buffer), 0, (struct sockaddr *) &cliente, &tamsock);
-		
-		if (len < 0) break;
-		
-		if (unpack (&netmsg, buffer, len) < 0) continue;
-		
-		if (netmsg.base.flags == FLAG_MCG) {
-			/* Multicast de anuncio de partida de red */
-			buddy_list_mcast_add (netmsg.bgame.nick, &cliente, tamsock);
-			continue;
-		} else if (netmsg.base.flags == (FLAG_MCG | FLAG_FIN)) {
-			/* Multicast de eliminación de partida */
-			buddy_list_mcast_remove (&cliente, tamsock);
-			continue;
-		}
-		
-		manejado = FALSE;
-		/* Buscar el juego que haga match por el número de ack */
-		ventana = (Juego *) primero;
-		while (ventana != NULL) {
-			/* Omitir esta ventana porque no es de tipo juego */
-			if (ventana->ventana.tipo != WINDOW_GAME) {
-				ventana = (Juego *) ventana->ventana.next;
-				continue;
-			}
-			if (netmsg.base.seq == (ventana->ack - 1)) {
-				manejado = TRUE;
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				printf ("Una repetición de paquete por su Seq, responderemos con el último paquete que nosotros enviamos\n");
-			} else if (netmsg.base.ack == (ventana->seq - 1)) {
-				manejado = TRUE;
-				/* Coincide por número de secuencia, pero es una solicitud de repetición */
-				
-				/* Reenviar, pero modificar el ack con su número de secuencia como ack */
-				//temp = htons (netmsg.base.seq + 1);
-				//memcpy (&ventana->buffer_send[5], &temp, sizeof (temp));
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				printf ("Una repetición de paquete por su ack, responderemos con el último paquete que nosotros enviamos\n");
-			} else if (netmsg.base.ack == ventana->seq) {
-				manejado = TRUE;
-				/* Coincide por número de secuencia */
-				if (netmsg.base.flags == FLAG_FIN) {
-					/* Un fin en cualquier momento es fin */
-					if (ventana->estado == NET_WAIT_WINNER) {
-						enviar_fin_ack (ventana, &netmsg);
-						ventana->estado = NET_CLOSED;
-					} else {
-						enviar_fin_ack (ventana, &netmsg);
-						next = (Juego *) ventana->ventana.next;
-						eliminar_juego (ventana);
-						ventana = next;
-						continue;
-					}
-				} else if (ventana->estado == NET_SYN_SENT && netmsg.base.flags == (FLAG_SYN | FLAG_ACK)) {
-					
-					/* Revisar quién empieza */
-					if (netmsg.syn_ack.initial != 0 && netmsg.syn_ack.initial != 255) {
-						enviar_fin (ventana, &netmsg, NET_DISCONNECT_UNKNOWN_START);
-					} else {
-						recibir_nick (ventana, netmsg.syn_ack.nick);
-						
-						/* Enviar el ack 0 sólo si el turno inicial es válido */
-						enviar_ack_0 (ventana, &netmsg);
-						if (netmsg.syn_ack.initial == 0) {
-							printf ("Ellos inician primero. Inicio = 1\n");
-							ventana->inicio = 1;
-						} else if (netmsg.syn_ack.initial == 255) {
-							printf ("Nosotros empezamos. Inicio = 0\n");
-							ventana->inicio = 0;
-						}
-						ventana->estado = NET_READY;
-						printf ("Listo para jugar, envié mi último ack\n");
-					}
-				} else if (ventana->estado == NET_SYN_RECV && netmsg.base.flags == FLAG_ACK) {
-					printf ("Listo para jugar\n");
-					ventana->estado = NET_READY;
-					//ventana->ack = netmsg.ack.seq + 1;
-				} else if ((ventana->estado == NET_SYN_RECV || ventana->estado == NET_READY) && netmsg.base.flags == FLAG_TRN) {
-					ventana->estado = NET_READY;
-					
-					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
-						/* Como no hubo errores, enviar el ack */
-						enviar_trn_ack (ventana, &netmsg);
-						buscar_ganador (ventana);
-					} else {
-						/* Hubo errores, enviar un fin */
-						enviar_fin (ventana, &netmsg, g);
-					}
-				} else if (ventana->estado == NET_WAIT_TRN_ACK && netmsg.base.flags == FLAG_TRN) {
-					/* Nos llegó un movimiento cuando estabamos esperando el ack */
-					/* Como su número de ack coincide con nuestro último envio, estamos bien */
-					ventana->estado = NET_READY;
-					
-					if (recibir_movimiento (ventana, netmsg.trn.turno, netmsg.trn.col, netmsg.trn.fila, &g) == 0) {
-						/* Como no hubo errores, enviar el ack */
-						enviar_trn_ack (ventana, &netmsg);
-						buscar_ganador (ventana);
-					} else {
-						/* Hubo errores, enviar un fin */
-						enviar_fin (ventana, &netmsg, g);
-					}
-				} else if (ventana->estado == NET_WAIT_TRN_ACK && netmsg.base.flags == (FLAG_TRN | FLAG_ACK)) {
-					/* Es una confirmación de mi movimiento */
-					/* Nada que revisar */
-					/* Tomar su número de seq */
-					//ventana->ack = netmsg.base.seq + 1;
-					ventana->estado = NET_READY;
-					buscar_ganador (ventana);
-				} else if (ventana->estado == NET_READY && netmsg.base.flags == (FLAG_ALV | FLAG_ACK)) {
-					/* Una confirmación de keep alive */
-					//ventana->ack = netmsg.base.seq + 1;
-					ventana->retry = 0;
-					ventana->last_response = SDL_GetTicks ();
-				} else if (ventana->estado == NET_READY && netmsg.base.flags == FLAG_ALV) {
-					/* Un keep alive */
-					
-					enviar_keep_alive_ack (ventana, &netmsg);
-					ventana->retry = 0;
-					ventana->last_response = SDL_GetTicks ();
-				} else if (ventana->estado == NET_WAIT_CLOSING && netmsg.base.flags == (FLAG_FIN | FLAG_ACK)) {
-					/* El ACK para nuestro FIN, ya cerramos y bye */
-					next = (Juego *) ventana->ventana.next;
-					eliminar_juego (ventana);
-					ventana = next;
-					printf ("Recibí un FIN + ACK, esto está totalmente cerrado\n");
-					continue;
-				} else if (ventana->estado == NET_WAIT_WINNER_ACK && netmsg.base.flags == (FLAG_FIN | FLAG_ACK)) {
-					/* EL ACK de fin de que el juego está completo */
-					ventana->estado = NET_CLOSED;
-				}
-			}
-			
-			ventana = (Juego *) ventana->ventana.next;
-		}
-		
-		if (!manejado) {
-			if (netmsg.base.flags == FLAG_SYN) {
-				/* Conexión inicial entrante */
-				printf ("Nueva conexión entrante\n");
-				ventana = crear_juego ();
-			
-				/* Copiar la dirección IP del cliente */
-				memcpy (&ventana->cliente, &cliente, tamsock);
-				ventana->tamsock = tamsock;
-				ventana->estado = NET_SYN_RECV;
-				
-				recibir_nick (ventana, netmsg.syn.nick);
-				
-				enviar_syn_ack (ventana, &netmsg, nick_global);
-			} else {
-				printf ("Paquete Find Four fuera de orden\n");
-			}
-		}
-	} while (1);
-	
-	/* Después de procesar los eventos de entrada,
-	 * revisar los timers, para reenviar eventos */
-	ventana = (Juego *) primero;
 	now_time = SDL_GetTicks();
+	ventana = (Juego *) get_first_window ();
 	
 	while (ventana != NULL) {
 		/* Omitir esta ventana porque no es de tipo juego */
@@ -682,12 +535,8 @@ void process_netevent (void) {
 			continue;
 		}
 		if (ventana->retry >= 5) {
-			if (ventana->estado == NET_WAIT_CLOSING) {
+			if (ventana->estado == NET_WAIT_CLOSING || ventana->estado == NET_SYN_SENT) {
 				/* Demasiados intentos */
-				next = (Juego *) ventana->ventana.next;
-				eliminar_juego (ventana);
-				ventana = next;
-			} else if (ventana->estado == NET_SYN_SENT) {
 				/* Caso especial, enviamos un SYN y nunca llegó,
 				 * ni siquiera intentamos enviar el fin */
 				next = (Juego *) ventana->ventana.next;
@@ -695,64 +544,159 @@ void process_netevent (void) {
 				ventana = next;
 			} else {
 				/* Intentar enviar un último mensaje de FIN */
-				enviar_fin (ventana, NULL, NET_DISCONNECT_NETERROR);
+				ventana->last_fin = NET_DISCONNECT_NETERROR;
+				ventana->retry = 0;
+				enviar_fin (ventana);
 			}
 			continue;
 		}
-		
-		/* Enviar un keep alive sólo si NO es nuestro turno */
-		if (ventana->estado == NET_READY && (ventana->turno % 2) != ventana->inicio) {
-			if (ventana->retry == 0 && now_time > ventana->last_response + NET_READY_TIMER) {
-				/* Enviar un Keep Alive */
-				enviar_keep_alive (ventana);
-				ventana->retry = 1;
-			} else if (ventana->retry > 0 && now_time > ventana->last_response + NET_CONN_TIMER) {
-				/* Reenviar el keep alive forma más continua */
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				ventana->retry++;
-			}
-		} else if (now_time > ventana->last_response + NET_CONN_TIMER) {
+		if (now_time > ventana->last_response + NET_CONN_TIMER) {
 			//printf ("Reenviando por timer: %i\n", ventana->estado);
 			if (ventana->estado == NET_SYN_SENT) {
 				printf ("Reenviando SYN inicial timer\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
+				conectar_juego (ventana, nick_global);
 				ventana->retry++;
-			} else if (ventana->estado == NET_SYN_RECV) {
-				printf ("Reenviando SYN + ACK por timer\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				ventana->retry++;
-			} else if (ventana->estado == NET_WAIT_TRN_ACK) {
+			} else if (ventana->estado == NET_WAIT_ACK || ventana->estado == NET_WAIT_WINNER) {
 				printf ("Reenviando TRN por timer\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
+				enviar_movimiento (ventana, ventana->turno - 1, ventana->last_col, ventana->last_fila);
 				ventana->retry++;
 			} else if (ventana->estado == NET_WAIT_CLOSING) {
 				printf ("Reenviando FIN por timer\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				ventana->retry++;
-			} else if (ventana->estado == NET_WAIT_WINNER_ACK) {
-				printf ("Reenviando FIN de ganador por timer\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
-				ventana->retry++;
-			} else if (ventana->estado == NET_WAIT_WINNER) {
-				printf ("Reenviando TRN + ACK esperando a que llegue el FIN\n");
-				sendto (fd_socket, ventana->buffer_send, ventana->len_send, 0, (struct sockaddr *) &ventana->cliente, ventana->tamsock);
-				ventana->last_response = SDL_GetTicks ();
+				enviar_fin (ventana);
 				ventana->retry++;
 			}
 		}
-		
 		ventana = (Juego *) ventana->ventana.next;
 	}
-	
-	/* Enviar el anuncio de juego multicast */
-	if (now_time > multicast_timer + NET_MCAST_TIMER) {
-		enviar_broadcast_game (nick_global);
-		multicast_timer = now_time;
-	}
 }
+
+void process_netevent (void) {
+	char buffer [256];
+	Juego *ventana, *next;
+	FFMessageNet message;
+	struct sockaddr_storage peer;
+	socklen_t peer_socklen;
+	int len;
+	int manejado;
+	
+	do {
+		peer_socklen = sizeof (peer);
+		/* Intentar hacer otra lectura para procesamiento */
+		len = recvfrom (fd_socket, buffer, sizeof (buffer), 0, (struct sockaddr *) &peer, &peer_socklen);
+		
+		if (len < 0) break;
+		
+		if (unpack (&message, buffer, len) < 0) {
+			printf ("Recibí un paquete mal estructurado\n");
+			continue;
+		}
+		
+		/* Si es una conexión inicial (SYN), verificar que ésta no sea una repetición de algo que ya hayamos enviado */
+		if (message.type == TYPE_SYN) {
+			ventana = (Juego *) get_first_window ();
+			
+			manejado = FALSE;
+			while (ventana != NULL) {
+				if (ventana->ventana.tipo != WINDOW_GAME) {
+					ventana = (Juego *) ventana->ventana.next;
+					continue;
+				}
+				
+				if (message.local == ventana->remote && sockaddr_cmp ((struct sockaddr *) &ventana->peer, (struct sockaddr *) &peer) == 0) {
+					/* Coincidencia por puerto remoto y dirección, es una repetición */
+					ventana->retry++;
+					enviar_res_syn (ventana, nick_global);
+					manejado = TRUE;
+					break;
+				}
+				ventana = (Juego *) ventana->ventana.next;
+			}
+			
+			if (manejado) continue;
+			
+			/* Si no fué manejado es conexión nueva */
+			printf ("Nueva conexión entrante\n");
+			ventana = crear_juego ();
+		
+			/* Copiar la dirección IP del peer */
+			memcpy (&ventana->peer, &peer, peer_socklen);
+			ventana->peer_socklen = peer_socklen;
+			
+			/* Copiar el puerto remoto */
+			ventana->remote = message.local;
+			
+			/* Copiar quién empieza */
+			if (message.initial == 0) {
+				ventana->inicio = 1;
+			} else if (message.initial == 255) {
+				ventana->inicio = 0;
+			}
+			
+			recibir_nick (ventana, message.nick);
+			
+			enviar_res_syn (ventana, nick_global);
+			
+			ventana->estado = NET_READY;
+			continue;
+		}
+		
+		/* Buscar el puerto local que coincide con el mensaje */
+		ventana = (Juego *) get_first_window ();
+		while (ventana != NULL) {
+			if (ventana->ventana.tipo != WINDOW_GAME || message.remote != ventana->local) {
+				ventana = (Juego *) ventana->ventana.next;
+				continue;
+			}
+			
+			if (message.type == TYPE_FIN) {
+				printf ("Recibí un fin\n");
+				enviar_fin_ack (ventana);
+				
+				/* Eliminar esta ventana */
+				eliminar_juego (ventana);
+			} else if ((message.type == TYPE_RES_SYN && ventana->estado != NET_SYN_SENT) ||
+			    (message.type == TYPE_TRN && ventana->estado != NET_READY) ||
+			    (message.type == TYPE_TRN_ACK && ventana->estado != NET_WAIT_ACK) ||
+			    (message.type == TYPE_TRN_ACK_GAME && ventana->estado != NET_WAIT_WINNER) ||
+			    (message.type == TYPE_FIN_ACK && ventana->estado != NET_WAIT_CLOSING)) {
+				printf ("Paquete en el momento incorrecto\n");
+				break;
+			} else if (message.type == TYPE_RES_SYN) {
+				/* Copiar el nick del otro jugador */
+				recibir_nick (ventana, message.nick);
+				
+				/* Copiar el puerto remoto */
+				ventana->remote = message.local;
+				
+				printf ("Recibí RES SYN. Su puerto remoto es: %i\n", ventana->remote);
+				ventana->estado = NET_READY;
+			} else if (message.type == TYPE_TRN) {
+				/* Recibir el movimiento */
+				recibir_movimiento (ventana, message.turno, message.col, message.fila);
+			} else if (message.type == TYPE_TRN_ACK) {
+				/* Verificar que el turno confirmado sea el local */
+				
+				if (message.turn_ack == ventana->turno) {
+					ventana->estado = NET_READY;
+				} else {
+					printf ("FIXME: ???\n");
+				}
+			} else if (message.type == TYPE_TRN_ACK_GAME) {
+				/* Última confirmación de turno */
+				ventana->estado = NET_CLOSED;
+			} else if (message.type == TYPE_FIN_ACK) {
+				/* La última confirmación que necesitaba */
+				/* Eliminar esta ventana */
+				eliminar_juego (ventana);
+			}
+			break;
+		}
+	} while (1);
+	
+	check_for_retry ();
+}
+
+void enviar_broadcast_game (char *nick) {
+
+}
+

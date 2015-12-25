@@ -30,12 +30,16 @@
 #define NET_READY_TIMER 4950
 #define NET_MCAST_TIMER 12000
 
-#define FLAG_ACK 0x01
-#define FLAG_SYN 0x02
-#define FLAG_TRN 0x04
-#define FLAG_FIN 0x08
-#define FLAG_ALV 0x10
-#define FLAG_MCG 0x20
+enum {
+	TYPE_SYN = 1,
+	TYPE_RES_SYN,
+	TYPE_TRN,
+	TYPE_TRN_ACK,
+	TYPE_TRN_ACK_GAME,
+	
+	TYPE_FIN = 64,
+	TYPE_FIN_ACK
+};
 
 #ifndef IN6_IS_ADDR_V4MAPPED
 #define IN6_IS_ADDR_V4MAPPED(a) \
@@ -47,90 +51,44 @@
         (((a)->s6_word[5]) == 0xFFFF))
 #endif
 
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-} FF_netbase;
-
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-	uint8_t version;
-	char nick[NICK_SIZE];
-} FF_syn;
-
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-	uint8_t version;
-	char nick[NICK_SIZE];
-	uint8_t initial;
-} FF_syn_ack;
-
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-} FF_ack;
-
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-	uint8_t turno;
-	uint8_t col;
-	uint8_t fila;
-} FF_trn;
-
-typedef struct {
-	uint8_t flags;
-	uint16_t seq;
-	uint16_t ack;
-	uint8_t fin;
-} FF_fin;
-
-typedef struct {
-	uint8_t flags;
-	uint8_t version;
-	char nick[NICK_SIZE];
-} FF_broadcast_game;
-
 /* Estructura para el mensaje de red */
-typedef union {
-	FF_netbase base;
-	FF_syn syn;
-	FF_syn_ack syn_ack;
-	FF_ack ack;
-	FF_trn trn;
-	FF_fin fin;
-	FF_broadcast_game bgame;
-} FF_NET;
+typedef struct {
+	uint8_t version;
+	uint8_t type;
+	uint16_t local, remote;
+	union {
+		struct {
+			char nick[NICK_SIZE];
+			uint8_t initial;
+		};
+		struct {
+			uint8_t turno, col, fila;
+		};
+		struct {
+			uint8_t turn_ack;
+			uint8_t win;
+		};
+		struct {
+			uint8_t fin;
+		};
+	};
+} FFMessageNet;
 
 /* Los posibles estados en los que se encuentra la partida */
 enum {
-	/* Acabamos de enviar un SYN para conexión inicial, esperamos el SYN + ACK
-	 */
+	/* Acabamos de enviar un SYN para conexión inicial, esperamos por la respuesta RES + SYN */
 	NET_SYN_SENT = 0,
-	/* Estado inicial para una conexión entrante, cuando llega una conexión entrante con SYN activado
-	 * Después de recibir el paquete, estamos obligados a enviar un SYN + ACK
-	 * En este estado estamos esperando recibir el ACK = 0
-	 */
-	NET_SYN_RECV,
 	
 	NET_READY,
-	NET_WAIT_TRN_ACK,
 	
-	/* Conexión que se está cerrando, esperamos por un último FIN + ACK si es que llega */
-	NET_WAIT_CLOSING,
+	/* Espero la confirmación de turno */
+	NET_WAIT_ACK,
 	
-	/* Conexión que sigue en linea, pero esperamos a que el otro extremo nos envié el anuncio de ganador */
+	/* Espero la confirmación de turno y que el otro admita que gané (o empatamos) */
 	NET_WAIT_WINNER,
 	
-	/* Conexión que espera el FIN + ACK del ganador para poder cerrar la conexión */
-	NET_WAIT_WINNER_ACK,
+	/* Envié un fin, espero la confirmación de FIN */
+	NET_WAIT_CLOSING,
 	
 	/* Conexión cerrada, para mostrar cuando alguien gana */
 	NET_CLOSED,
@@ -145,23 +103,29 @@ enum {
 	NET_DISCONNECT_WRONG_TURN, /* Número de turno equivocado */
 	NET_DISCONNECT_WRONG_MOV, /* Movimiento equivocado, AKA columna llena */
 	
-	NET_USER_QUIT, /* El usuario abandonó la partida */
-	
-	NET_DISCONNECT_YOUWIN = 64,
-	NET_DISCONNECT_YOULOST,
-	NET_DISCONNECT_TIE
+	NET_USER_QUIT /* El usuario abandonó la partida */
+};
+
+/* Razones de confirmación de turno y finalización de juego */
+enum {
+	GAME_FINISH_TIE = 1,
+	GAME_FINISH_LOST
 };
 
 /* Funciones públicas */
 int findfour_netinit (int);
 void findfour_netclose (void);
 
+int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y);
+
 void process_netevent (void);
 
 void conectar_con (Juego *, const char *, const char *, const int);
 void conectar_con_sockaddr (Juego *, const char *, struct sockaddr *, socklen_t);
-void enviar_movimiento (Juego *, int, int);
-void enviar_fin (Juego *, FF_NET *, int);
+void enviar_movimiento (Juego *, int, int, int);
+void enviar_mov_ack (Juego *);
+void enviar_mov_ack_finish (Juego *, int);
+void enviar_fin (Juego *);
 
 void enviar_broadcast_game (char *nick);
 
