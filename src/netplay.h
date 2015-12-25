@@ -37,6 +37,9 @@ enum {
 	TYPE_TRN_ACK,
 	TYPE_TRN_ACK_GAME,
 	
+	TYPE_MCAST_ANNOUNCE = 32,
+	TYPE_MCAST_FIN,
+	
 	TYPE_FIN = 64,
 	TYPE_FIN_ACK
 };
@@ -128,6 +131,7 @@ void enviar_mov_ack_finish (Juego *, int);
 void enviar_fin (Juego *);
 
 void enviar_broadcast_game (char *nick);
+void enviar_end_broadcast_game (void);
 
 #endif /* __NETPLAY_H__ */
 

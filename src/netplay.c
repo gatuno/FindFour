@@ -153,7 +153,7 @@ int findfour_netinit (int puerto) {
 	h = 64;
 	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
 	
-	//enviar_broadcast_game (nick_global);
+	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
 	/* Ningún error */
@@ -163,7 +163,7 @@ int findfour_netinit (int puerto) {
 void findfour_netclose (void) {
 	/* Enviar el multicast de retiro de partida */
 	
-	//enviar_end_broadcast_game ();
+	enviar_end_broadcast_game ();
 	/* Y cerrar el socket */
 	
 	close (fd_socket);
@@ -568,6 +568,12 @@ void check_for_retry (void) {
 		}
 		ventana = (Juego *) ventana->ventana.next;
 	}
+	
+	/* Enviar el anuncio de juego multicast */
+	if (now_time > multicast_timer + NET_MCAST_TIMER) {
+		enviar_broadcast_game (nick_global);
+		multicast_timer = now_time;
+	}
 }
 
 void process_netevent (void) {
@@ -697,6 +703,34 @@ void process_netevent (void) {
 }
 
 void enviar_broadcast_game (char *nick) {
+	char buffer[32];
+	
+	buffer[0] = buffer[1] = 'F';
+	buffer[2] = 2; /* Versión del protocolo */
+	
+	buffer[3] = TYPE_MCAST_ANNOUNCE;
+	
+	strncpy (&(buffer[4]), nick, sizeof (char) * NICK_SIZE);
+	
+	buffer[4 + NICK_SIZE - 1] = '\0';
+	
+	/* Enviar a IPv4 y IPv6 */
+	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	
+	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+}
 
+void enviar_end_broadcast_game (void) {
+	char buffer[4];
+	
+	buffer[0] = buffer[1] = 'F';
+	buffer[2] = 2; /* Versión del protocolo */
+	
+	buffer[3] = TYPE_MCAST_FIN;
+	
+	/* Enviar a IPv4 y IPv6 */
+	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	
+	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
 }
 
