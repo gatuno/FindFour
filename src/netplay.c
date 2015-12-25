@@ -516,6 +516,15 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		/* Copiar el puerto remoto */
 		memcpy (&temp, &buffer[6], sizeof (temp));
 		msg->remote = ntohs (temp);
+	} else if (msg->type == TYPE_MCAST_ANNOUNCE) {
+		if (len < 4 + NICK_SIZE) return -1;
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[4], sizeof (char) * NICK_SIZE);
+	} else if (msg->type == TYPE_MCAST_FIN) {
+		/* Ningún dato extra */
+	} else {
+		return -1;
 	}
 	
 	return 0;
@@ -594,6 +603,16 @@ void process_netevent (void) {
 		
 		if (unpack (&message, buffer, len) < 0) {
 			printf ("Recibí un paquete mal estructurado\n");
+			continue;
+		}
+		
+		if (message.type == TYPE_MCAST_ANNOUNCE) {
+			/* Multicast de anuncio de partida de red */
+			buddy_list_mcast_add (message.nick, &peer, peer_socklen);
+			continue;
+		} else if (message.type == TYPE_MCAST_FIN) {
+			/* Multicast de eliminación de partida */
+			buddy_list_mcast_remove (&peer, peer_socklen);
 			continue;
 		}
 		
