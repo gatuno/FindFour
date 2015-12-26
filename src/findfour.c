@@ -73,6 +73,8 @@
 
 const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/lodge.png",
+	GAMEDATA_DIR "images/lodge_fire.png",
+	GAMEDATA_DIR "images/lodge_candle.png",
 	
 	GAMEDATA_DIR "images/ventana.png",
 	GAMEDATA_DIR "images/tablero.png",
@@ -320,13 +322,15 @@ int game_loop (void) {
 	SDL_Event event;
 	SDLKey key;
 	Uint32 last_time, now_time;
-	SDL_Rect rect;
+	SDL_Rect rect, rect2;
 	int *map = NULL;
 	
 	int g, h;
 	int start = 0;
 	int x, y;
 	int manejado;
+	int background_fire;
+	int lodge_candle;
 	
 	primero = NULL;
 	ultimo = NULL;
@@ -349,6 +353,9 @@ int game_loop (void) {
 	}
 	
 	SDL_EnableUNICODE (1);
+	background_fire = 0;
+	lodge_candle = 0;
+	
 	do {
 		last_time = SDL_GetTicks ();
 		
@@ -456,6 +463,12 @@ int game_loop (void) {
 							
 							ventana = ventana->next;
 						}
+						if (!manejado) {
+							/* Si el movimiento del mouse no entró a alguna ventana, es para el fondo */
+							if (x >= 253 && x < 272 && y >= 117 && y < 179 && lodge_candle < 14) {
+								lodge_candle = 14;
+							}
+						}
 					}
 					
 					cp_button_motion (map);
@@ -492,6 +505,50 @@ int game_loop (void) {
 		}
 		
 		SDL_BlitSurface (images[IMG_LODGE], NULL, screen, NULL);
+		
+		/* La fogata del lodge */
+		g = background_fire / 2;
+		if (g > 0) {
+			rect2.x = (g - 1) * 47;
+			rect2.y = 0;
+			rect.w = rect2.w = 47;
+			rect.h = rect2.h = 42;
+			
+			rect.x = 638;
+			rect.y = 217;
+			SDL_BlitSurface (images[IMG_LODGE_FIRE], &rect2, screen, &rect);
+		}
+		background_fire++;
+		if (background_fire >= 10) background_fire = 0;
+		
+		/* La vela del lodge */
+		if (lodge_candle < 30) {
+			g = lodge_candle / 2;
+		} else if (lodge_candle >= 30 && lodge_candle < 38) {
+			g = 15;
+		} else {
+			g = 16 + (lodge_candle - 38) / 2;
+		}
+		
+		if (g > 0) {
+			rect2.x = (g - 1) * 15;
+			rect2.y = 0;
+			rect2.w = rect.w = 15;
+			rect2.h = rect.h = 42;
+			
+			rect.x = 254;
+			rect.y = 95;
+			SDL_BlitSurface (images[IMG_LODGE_CANDLE], &rect2, screen, &rect);
+		}
+		
+		if (lodge_candle == 13) {
+			lodge_candle = 0;
+		} else if (lodge_candle == 41) {
+			lodge_candle = 4;
+		} else {
+			lodge_candle++;
+		}
+		
 		//printf ("Dibujar: \n");
 		for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
 			if (!ventana->mostrar) continue;
