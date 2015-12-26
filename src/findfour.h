@@ -130,9 +130,9 @@ struct _Ventana {
 
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
-extern SDL_Surface *nick_image;
+extern SDL_Surface *nick_image, *nick_image_blue;
 
-extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
+extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy;
 
 Ventana *get_first_window (void);
 void set_first_window (Ventana *v);

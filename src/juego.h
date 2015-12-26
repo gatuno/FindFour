@@ -52,7 +52,7 @@ typedef struct _Juego {
 	
 	/* El nick del otro jugador */
 	char nick_remoto[NICK_SIZE];
-	SDL_Surface *nick_remoto_image;
+	SDL_Surface *nick_remoto_image, *nick_remoto_image_blue;
 	int win, win_col, win_fila, win_dir;
 	
 	/* Estado del protocolo de red */

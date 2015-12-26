@@ -27,6 +27,7 @@
 #include "juego.h"
 #include "netplay.h"
 #include "cp-button.h"
+#include "draw-text.h"
 
 int juego_mouse_down (Juego *j, int x, int y, int **button_map);
 int juego_mouse_motion (Juego *j, int x, int y, int **button_map);
@@ -80,6 +81,7 @@ Juego *crear_juego (void) {
 	/* Vaciar el nick del otro jugador */
 	memset (j->nick_remoto, 0, sizeof (j->nick_remoto));
 	j->nick_remoto_image = NULL;
+	j->nick_remoto_image_blue = NULL;
 	
 	if (get_first_window () == NULL) {
 		set_last_window ((Ventana *) j);
@@ -132,6 +134,7 @@ void eliminar_juego (Juego *j) {
 	}
 	
 	if (j->nick_remoto_image != NULL) SDL_FreeSurface (j->nick_remoto_image);
+	if (j->nick_remoto_image_blue != NULL) SDL_FreeSurface (j->nick_remoto_image_blue);
 	stop_drag ((Ventana *) j);
 	free (j);
 }
@@ -512,7 +515,7 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 	rect.w = nick_image->w;
 	rect.h = nick_image->h;
 	
-	SDL_BlitSurface (nick_image, NULL, screen, &rect);
+	SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, screen, &rect);
 	
 	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
 	if (j->estado != NET_SYN_SENT) {
@@ -524,7 +527,7 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		rect.w = j->nick_remoto_image->w;
 		rect.h = j->nick_remoto_image->h;
 		
-		SDL_BlitSurface (j->nick_remoto_image, NULL, screen, &rect);
+		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, screen, &rect);
 	}
 	
 	j->timer++;
@@ -609,10 +612,16 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 
 void recibir_nick (Juego *j, const char *nick) {
 	SDL_Color blanco;
+	SDL_Color negro;
 	
 	memcpy (j->nick_remoto, nick, sizeof (j->nick_remoto));
 	
 	/* Renderizar el nick del otro jugador */
 	blanco.r = blanco.g = blanco.b = 255;
-	j->nick_remoto_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, j->nick_remoto, blanco);
+	negro.r = negro.g = negro.b = 0;
+	j->nick_remoto_image = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
+	
+	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xFF;
+	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
+	j->nick_remoto_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
 }

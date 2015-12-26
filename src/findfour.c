@@ -58,6 +58,7 @@
 #include "chat.h"
 #include "inputbox.h"
 #include "utf8.h"
+#include "draw-text.h"
 
 #define FPS (1000/24)
 
@@ -142,6 +143,7 @@ SDL_Surface * screen;
 SDL_Surface * images [NUM_IMAGES];
 SDL_Surface * text_waiting;
 SDL_Surface * nick_image = NULL;
+SDL_Surface * nick_image_blue = NULL;
 
 static Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
@@ -150,7 +152,7 @@ int server_port;
 char nick_global[NICK_SIZE];
 static int nick_default;
 
-TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *tt16_comiccrazy;
+TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy;
 
 Ventana *get_first_window (void) {
 	return primero;
@@ -222,12 +224,18 @@ int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto)
 }
 
 void render_nick (void) {
-	SDL_Color blanco;
+	SDL_Color blanco, negro;
 	
 	if (nick_image != NULL) SDL_FreeSurface (nick_image);
+	if (nick_image_blue != NULL) SDL_FreeSurface (nick_image_blue);
 	
+	negro.r = negro.g = negro.b = 0;
 	blanco.r = blanco.g = blanco.b = 255;
-	nick_image = TTF_RenderUTF8_Blended (tt16_comiccrazy, nick_global, blanco);
+	nick_image = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
+	
+	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
+	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
+	nick_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
 }
 
 void change_nick (InputBox *ib, const char *texto) {
@@ -665,8 +673,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	tt16_comiccrazy = TTF_OpenFont (GAMEDATA_DIR "comicrazy.ttf", 16);
-	if (!tt16_comiccrazy) {
+	ttf16_comiccrazy = TTF_OpenFont (GAMEDATA_DIR "comicrazy.ttf", 16);
+	if (!ttf16_comiccrazy) {
 		fprintf (stderr,
 			"Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"
