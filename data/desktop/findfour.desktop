@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Terminal=false
+Name=Find Four
+Icon=findfour
+Comment=Play Find Four game with friends online
+Exec=findfour
+Categories=Game;
