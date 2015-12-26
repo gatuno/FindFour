@@ -194,6 +194,9 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	memcpy (&juego->peer, res->ai_addr, res->ai_addrlen);
 	juego->peer_socklen = res->ai_addrlen;
 	
+	/* Sortear el turno inicial */
+	juego->inicio = RANDOM(2);
+	
 	conectar_juego (juego, nick);
 }
 
@@ -201,6 +204,9 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen) {
 	memcpy (&juego->peer, peer, peer_socklen);
 	juego->peer_socklen = peer_socklen;
+	
+	/* Sortear el turno inicial */
+	juego->inicio = RANDOM(2);
 	
 	conectar_juego (juego, nick);
 }
@@ -228,8 +234,6 @@ void conectar_juego (Juego *juego, const char *nick) {
 	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
 	buffer_send[7 + NICK_SIZE] = '\0';
 	
-	/* Sortear el turno inicial */
-	juego->inicio = RANDOM(2);
 	buffer_send[8 + NICK_SIZE] = (juego->inicio == 1 ? 255 : 0);
 	
 	sendto (fd_socket, buffer_send, 9 + NICK_SIZE, 0, (struct sockaddr *) &juego->peer, juego->peer_socklen);

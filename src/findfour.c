@@ -37,6 +37,7 @@
 
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_mixer.h>
 #include <SDL_ttf.h>
 
 /* Para el manejo de red */
@@ -124,7 +125,10 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/chat.png"
 };
 
-/* TODO: Listar aquí los automátas */
+const char *sound_names[NUM_SOUNDS] = {
+	GAMEDATA_DIR "sounds/drop.wav",
+	GAMEDATA_DIR "sounds/win.wav"
+};
 
 /* Codigos de salida */
 enum {
@@ -144,6 +148,9 @@ SDL_Surface * images [NUM_IMAGES];
 SDL_Surface * text_waiting;
 SDL_Surface * nick_image = NULL;
 SDL_Surface * nick_image_blue = NULL;
+
+int use_sound;
+Mix_Chunk * sounds[NUM_SOUNDS];
 
 static Ventana *primero, *ultimo, *drag;
 int drag_x, drag_y;
@@ -626,6 +633,25 @@ void setup (void) {
 		exit (1);
 	}
 	
+	use_sound = 1;
+	if (SDL_InitSubSystem (SDL_INIT_AUDIO) < 0) {
+		fprintf (stdout,
+			"Warning: Can't initialize the audio subsystem\n"
+			"Continuing...\n");
+		use_sound = 0;
+	}
+	
+	if (use_sound) {
+		/* Inicializar el sonido */
+		if (Mix_OpenAudio (22050, AUDIO_S16, 2, 4096) < 0) {
+			fprintf (stdout,
+				"Warning: Can't initialize the SDL Mixer library\n");
+			use_sound = 0;
+		} else {
+			Mix_AllocateChannels (3);
+		}
+	}
+	
 	for (g = 0; g < NUM_IMAGES; g++) {
 		image = IMG_Load (images_names[g]);
 		
@@ -641,6 +667,23 @@ void setup (void) {
 		
 		images[g] = image;
 		/* TODO: Mostrar la carga de porcentaje */
+	}
+	
+	if (use_sound) {
+		for (g = 0; g < NUM_SOUNDS; g++) {
+			sounds[g] = Mix_LoadWAV (sound_names[g]);
+			
+			if (sounds[g] == NULL) {
+				fprintf (stderr,
+					"Failed to load data file:\n"
+					"%s\n"
+					"The error returned by SDL is:\n"
+					"%s\n", sound_names[g], SDL_GetError ());
+				SDL_Quit ();
+				exit (1);
+			}
+			Mix_VolumeChunk (sounds[g], MIX_MAX_VOLUME / 2);
+		}
 	}
 	
 	/* Cargar las tipografias */

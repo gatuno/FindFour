@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <SDL.h>
+#include <SDL_ttf.h>
+#include <SDL_mixer.h>
 
 #include "findfour.h"
 #include "juego.h"
@@ -357,6 +359,10 @@ void buscar_ganador (Juego *j) {
 			}
 		}
 	}
+	
+	if (j->win != 0) {
+		if (use_sound) Mix_PlayChannel (-1, sounds[SND_WIN], 0);
+	}
 }
 
 void recibir_movimiento (Juego *j, int turno, int col, int fila) {
@@ -400,6 +406,8 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 		} else {
 			j->tablero[g][col] = (j->turno % 2) + 1;
 			j->turno++;
+			
+			if (use_sound) Mix_PlayChannel (-1, sounds[SND_DROP], 0);
 			
 			buscar_ganador (j);
 			

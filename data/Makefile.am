@@ -36,6 +36,8 @@ nobase_dist_gamedata_DATA = images/lodge.png \
 	images/tab.png \
 	images/inputbox.png \
 	images/chat.png \
+	sounds/drop.wav \
+	sounds/win.wav \
 	ccfacefront.ttf \
 	burbankbm.ttf \
 	comicrazy.ttf

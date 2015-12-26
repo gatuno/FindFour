@@ -23,6 +23,7 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <SDL_mixer.h>
 
 #define NICK_SIZE 16
 
@@ -94,6 +95,13 @@ enum {
 };
 
 enum {
+	SND_DROP,
+	SND_WIN,
+	
+	NUM_SOUNDS
+};
+
+enum {
 	WINDOW_GAME,
 	WINDOW_CHAT,
 	
@@ -131,6 +139,9 @@ struct _Ventana {
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image, *nick_image_blue;
+
+extern int use_sound;
+extern Mix_Chunk * sounds[NUM_SOUNDS];
 
 extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy;
 
