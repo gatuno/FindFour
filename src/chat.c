@@ -25,6 +25,16 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+/* Para el manejo de red */
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#endif
+#include <sys/types.h>
+
 #include "findfour.h"
 #include "chat.h"
 #include "cp-button.h"

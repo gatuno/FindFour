@@ -25,6 +25,16 @@
 #include <SDL_ttf.h>
 #include <SDL_mixer.h>
 
+/* Para el manejo de la red */
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#endif
+#include <sys/types.h>
+
 #include "findfour.h"
 #include "juego.h"
 #include "netplay.h"

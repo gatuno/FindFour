@@ -24,9 +24,14 @@
 #include <SDL.h>
 
 /* Para el manejo de red */
-#include <sys/socket.h>
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#endif
 #include <sys/types.h>
-#include <netinet/in.h>
 
 #include "findfour.h"
 

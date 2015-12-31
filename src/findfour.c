@@ -40,11 +40,6 @@
 #include <SDL_mixer.h>
 #include <SDL_ttf.h>
 
-/* Para el manejo de red */
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-
 /* Para el tipo de dato uint8_t */
 #include <stdint.h>
 
@@ -71,6 +66,11 @@
 
 #ifndef TRUE
 #define TRUE !FALSE
+#endif
+
+#ifdef WIN32
+#	undef GAMEDATA_DIR
+#	define GAMEDATA_DIR "./"
 #endif
 
 const char *images_names[NUM_IMAGES] = {
@@ -578,6 +578,8 @@ int game_loop (void) {
 		
 	} while (!done);
 	SDL_EnableUNICODE (0);
+	
+	/* FIXME: Recorrer todas las ventanas y enviar un fin a todas las ventanas de juego */
 	
 	findfour_netclose ();
 	

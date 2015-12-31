@@ -22,10 +22,15 @@
 #include <stdio.h>
 
 /* Para el manejo de red */
-#include <sys/socket.h>
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#	include <netdb.h>
+#endif
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <netdb.h>
 
 /* Para los sockets no-bloqueantes */
 #include <unistd.h>
@@ -80,9 +85,89 @@ int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
 	return 0;
 }
 
+#ifdef __MINGW32__
+int findfour_netinit (int puerto) {
+	struct sockaddr_storage bind_addr;
+	struct ip_mreq mcast_req;
+	struct ipv6_mreq mcast_req6;
+	unsigned char g;
+	unsigned int h;
+	
+	WSADATA wsaData;
+	int nRet = WSAStartup( MAKEWORD(2,2), &wsaData );
+	if (nRet == SOCKET_ERROR ) {
+		fprintf (stderr, "Failed to init Winsock library\n");
+		return -1;
+	}
+	
+	/* Crear, iniciar el socket */
+	fd_socket = socket (AF_INET, SOCK_DGRAM, 0);
+	
+	if (fd_socket < 0) {
+		/* Mostrar la ventana de error */
+		return -1;
+	}
+	
+	ipv4 = (struct sockaddr_in *) &bind_addr;
+	
+	ipv4->sin_family = AF_INET;
+	ipv4->sin_port = htons (puerto);
+	ipv4->sin_addr.s_addr = INADDR_ANY;
+	
+	/* Asociar el socket con el puerto */
+	if (bind (fd_socket, (struct sockaddr *) &bind_addr, sizeof (bind_addr)) < 0) {
+		/* Mostrar ventana de error */
+		
+		return -1;
+	}
+	
+	/* No utilizaré poll, sino llamadas no-bloqueantes */
+	u_long flags = 1;
+	ioctlsocket (fd_socket, FIONBIO, &flags);
+	
+	/* Intentar el binding request */
+	try_stun_binding ("stun.ekiga.net", fd_socket);
+	
+	/* Hacer join a los grupos multicast */
+	/* Primero join al IPv4 */
+	mcast_addr.sin_family = AF_INET;
+	mcast_addr.sin_port = htons (puerto);
+
+	mcast_addr.sin_addr.s_addr = inet_addr (MULTICAST_IPV4_GROUP);
+	mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
+	mcast_req.imr_interface.s_addr = INADDR_ANY;
+	
+	if (setsockopt (fd_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mcast_req, sizeof(mcast_req)) < 0) {
+		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
+	}
+	
+	g = 0;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
+	g = 1;
+	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
+	
+	enviar_broadcast_game (nick_global);
+	multicast_timer = SDL_GetTicks ();
+	
+	/* Ningún error */
+	return 0;
+}
+
+void findfour_netclose (void) {
+	/* Enviar el multicast de retiro de partida */
+	enviar_end_broadcast_game ();
+	
+	/* Y cerrar el socket */
+	closesocket (fd_socket);
+	
+	WSACleanup();
+}
+#else
+
 int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
 	struct sockaddr_in6 *ipv6;
+	struct sockaddr_in *ipv4;
 	struct ip_mreq mcast_req;
 	struct ipv6_mreq mcast_req6;
 	unsigned char g;
@@ -120,8 +205,8 @@ int findfour_netinit (int puerto) {
 	/* Primero join al IPv4 */
 	mcast_addr.sin_family = AF_INET;
 	mcast_addr.sin_port = htons (puerto);
-	
-	inet_aton (MULTICAST_IPV4_GROUP, &mcast_addr.sin_addr.s_addr);
+
+	inet_pton (AF_INET, MULTICAST_IPV4_GROUP, &mcast_addr.sin_addr.s_addr);
 	mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
 	mcast_req.imr_interface.s_addr = INADDR_ANY;
 	
@@ -152,7 +237,7 @@ int findfour_netinit (int puerto) {
 	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &h, sizeof (h));
 	h = 64;
 	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
-	
+		
 	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
@@ -162,12 +247,12 @@ int findfour_netinit (int puerto) {
 
 void findfour_netclose (void) {
 	/* Enviar el multicast de retiro de partida */
-	
 	enviar_end_broadcast_game ();
-	/* Y cerrar el socket */
 	
+	/* Y cerrar el socket */
 	close (fd_socket);
 }
+#endif
 
 void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
 	int n;
@@ -739,8 +824,9 @@ void enviar_broadcast_game (char *nick) {
 	
 	/* Enviar a IPv4 y IPv6 */
 	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	
+#ifndef __MINGW32__
 	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+#endif
 }
 
 void enviar_end_broadcast_game (void) {
@@ -753,7 +839,8 @@ void enviar_end_broadcast_game (void) {
 	
 	/* Enviar a IPv4 y IPv6 */
 	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	
+#ifndef __MINGW32__
 	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+#endif
 }
 

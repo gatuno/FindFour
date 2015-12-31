@@ -23,10 +23,15 @@
 #include <string.h>
 
 /* Para el manejo de red */
-#include <sys/socket.h>
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#	include <netdb.h>
+#endif
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <netdb.h>
 
 #include "stun.h"
 
@@ -37,7 +42,7 @@ void build_binding_request (StunMessage* msg, int change_port, int change_ip, in
 	msg->msgHdr.msgType = BindRequestMsg;
 	
 	for (g = 0; g < 16; g = g + 4) {
-		r = random ();
+		r = rand ();
 		msg->msgHdr.id[g+0]= r>>0;
 		msg->msgHdr.id[g+1]= r>>8;
 		msg->msgHdr.id[g+2]= r>>16;

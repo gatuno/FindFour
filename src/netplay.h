@@ -23,6 +23,15 @@
 
 #include <stdint.h>
 
+#ifdef __MINGW32__
+#	include <winsock2.h>
+#	include <ws2tcpip.h>
+#else
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#endif
+#include <sys/types.h>
+
 #include "findfour.h"
 #include "juego.h"
 
@@ -46,12 +55,18 @@ enum {
 
 #ifndef IN6_IS_ADDR_V4MAPPED
 #define IN6_IS_ADDR_V4MAPPED(a) \
-       ((((a)->s6_words[0]) == 0) && \
-        (((a)->s6_words[1]) == 0) && \
-        (((a)->s6_word[2]) == 0) && \
-        (((a)->s6_word[3]) == 0) && \
-        (((a)->s6_word[4]) == 0) && \
-        (((a)->s6_word[5]) == 0xFFFF))
+       ((((a)->s6_addr[0]) == 0) && \
+        (((a)->s6_addr[1]) == 0) && \
+        (((a)->s6_addr[2]) == 0) && \
+        (((a)->s6_addr[3]) == 0) && \
+        (((a)->s6_addr[4]) == 0) && \
+        (((a)->s6_addr[5]) == 0) && \
+        (((a)->s6_addr[6]) == 0) && \
+        (((a)->s6_addr[7]) == 0) && \
+        (((a)->s6_addr[8]) == 0) && \
+        (((a)->s6_addr[9]) == 0) && \
+        (((a)->s6_addr[10]) == 0xFF) && \
+        (((a)->s6_addr[11]) == 0xFF))
 #endif
 
 /* Estructura para el mensaje de red */

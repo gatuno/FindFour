@@ -1,6 +1,6 @@
-AC_INIT([Find Four], [0.1], [], [findfour])
+AC_INIT([Find Four], [0.7], [], [findfour])
 
-AC_REVISION([Revision 1])
+AC_REVISION([Revision 2])
 
 AC_CONFIG_AUX_DIR([build-aux])
 
