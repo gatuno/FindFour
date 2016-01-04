@@ -1,8 +1,8 @@
 /*
- * draw-text.h
+ * message.h
  * This file is part of Find Four
  *
- * Copyright (C) 2015 - Félix Arreola Rodríguez
+ * Copyright (C) 2016 - Félix Arreola Rodríguez
  *
  * Find Four is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,28 @@
  * along with Find Four. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DRAW_TEXT_H__
-#define __DRAW_TEXT_H__
+#ifndef __MESSAGE_H__
+#define __MESSAGE_H__
+
+#include <stdarg.h>
 
 #include <SDL.h>
-#include <SDL_ttf.h>
 
-SDL_Surface *draw_text (TTF_Font *font, const char *cadena, SDL_Color *color);
-SDL_Surface *draw_text_with_shadow (TTF_Font *font, int outline, const char *text, SDL_Color foreground, SDL_Color background);
+enum {
+	MSG_NORMAL,
+	MSG_ERROR
+};
 
-#endif /* __DRAW_TEXT_H__ */
+typedef struct _Message Message;
+
+extern Message *list_msg;
+
+void message_add (int tipo, const char *cadena, ...);
+void message_display (SDL_Surface *screen);
+
+int message_mouse_down (int, int, int **);
+int message_mouse_motion (int, int, int **);
+int message_mouse_up (int, int, int **);
+
+#endif /* __MESSAGE_H__ */
 

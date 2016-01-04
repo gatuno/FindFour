@@ -36,6 +36,14 @@ nobase_dist_gamedata_DATA = images/lodge.png \
 	images/tab.png \
 	images/inputbox.png \
 	images/chat.png \
+	images/boton-error-down.png \
+	images/boton-error-over.png \
+	images/boton-error-up.png \
+	images/boton-normal-down.png \
+	images/boton-normal-over.png \
+	images/boton-normal-up.png \
+	images/error.png \
+	images/fuzz.png \
 	images/icon.png \
 	sounds/drop.wav \
 	sounds/win.wav \

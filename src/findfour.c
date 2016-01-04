@@ -55,6 +55,7 @@
 #include "inputbox.h"
 #include "utf8.h"
 #include "draw-text.h"
+#include "message.h"
 
 #define FPS (1000/24)
 
@@ -122,7 +123,18 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/tab.png",
 	GAMEDATA_DIR "images/inputbox.png",
 	
-	GAMEDATA_DIR "images/chat.png"
+	GAMEDATA_DIR "images/chat.png",
+	
+	GAMEDATA_DIR "images/error.png",
+	GAMEDATA_DIR "images/boton-error-up.png",
+	GAMEDATA_DIR "images/boton-error-over.png",
+	GAMEDATA_DIR "images/boton-error-down.png",
+	
+	GAMEDATA_DIR "images/boton-normal-up.png",
+	GAMEDATA_DIR "images/boton-normal-over.png",
+	GAMEDATA_DIR "images/boton-normal-down.png",
+	
+	GAMEDATA_DIR "images/fuzz.png"
 };
 
 const char *sound_names[NUM_SOUNDS] = {
@@ -141,6 +153,7 @@ enum {
 int game_loop (void);
 void setup (void);
 SDL_Surface * set_video_mode(unsigned);
+void drawfuzz (int x, int y, int w, int h);
 
 /* Variables globales */
 SDL_Surface * screen;
@@ -153,7 +166,7 @@ int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
 
 static Ventana *primero, *ultimo, *drag;
-int drag_x, drag_y;
+static int drag_x, drag_y;
 
 int server_port;
 char nick_global[NICK_SIZE];
@@ -386,6 +399,8 @@ int game_loop (void) {
 					
 					while (ventana != NULL && ventana->mostrar != TRUE) ventana = ventana->next;
 					
+					if (list_msg != NULL) ventana = NULL; /* No hay eventos de teclado cuando hay un mensaje en pantalla */
+					
 					if (ventana != NULL) {
 						/* Revisar si le interesa nuestro evento */
 						if (ventana->key_down != NULL) {
@@ -408,6 +423,10 @@ int game_loop (void) {
 					if (event.button.button != SDL_BUTTON_LEFT) break;
 					map = NULL;
 					manejado = FALSE;
+					if (list_msg != NULL) {
+						message_mouse_down (event.button.x, event.button.y, &map);
+						manejado = TRUE;
+					}
 					x = event.button.x;
 					y = event.button.y;
 					
@@ -459,6 +478,10 @@ int game_loop (void) {
 						/* En caso contrario, buscar por un evento de ficha de turno */
 						manejado = FALSE;
 						
+						if (list_msg != NULL) {
+							message_mouse_motion (event.motion.x, event.motion.y, &map);
+							manejado = TRUE;
+						}
 						x = event.motion.x;
 						y = event.motion.y;
 						for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
@@ -473,7 +496,8 @@ int game_loop (void) {
 						/* Recorrer las ventanas restantes y mandarles un evento mouse motion nulo */
 						while (ventana != NULL) {
 							if (ventana->mouse_motion != NULL) {
-								manejado = ventana->mouse_motion (ventana, -1, -1, NULL);
+								int *t;
+								ventana->mouse_motion (ventana, -1, -1, &t);
 							}
 							
 							ventana = ventana->next;
@@ -495,6 +519,11 @@ int game_loop (void) {
 					map = NULL;
 					x = event.button.x;
 					y = event.button.y;
+					
+					if (list_msg != NULL) {
+						message_mouse_up (event.button.x, event.button.y, &map);
+						manejado = TRUE;
+					}
 					
 					ventana = primero;
 					while (ventana != NULL && manejado == FALSE) {
@@ -571,6 +600,12 @@ int game_loop (void) {
 			ventana->draw (ventana, screen);
 		}
 		
+		/* Dibujar los mensajes en pantalla */
+		if (list_msg != NULL) {
+			drawfuzz (0, 0, 760, 480);
+			message_display (screen);
+		}
+		
 		SDL_Flip (screen);
 		
 		now_time = SDL_GetTicks ();
@@ -596,6 +631,38 @@ void start_drag (Ventana *v, int offset_x, int offset_y) {
 
 void stop_drag (Ventana *v) {
 	if (drag == v) drag = NULL;
+}
+
+void full_stop_drag (void) {
+	drag = NULL;
+}
+
+void drawfuzz (int x, int y, int w, int h) {
+	int xx, yy;
+	SDL_Rect src, dest;
+
+	for (yy = y; yy < y + h; yy = yy + (images[IMG_FUZZ] -> h)) {
+		for (xx = x; xx < x + w; xx = xx + (images[IMG_FUZZ] -> w)) {
+			src.x = 0;
+			src.y = 0;
+			src.w = images[IMG_FUZZ] -> w;
+			src.h = images[IMG_FUZZ] -> h;
+
+			if (xx + src.w > x + w)
+			src.w = x + w - xx;
+
+			if (yy + src.h > y + h)
+			src.h = y + h - yy;
+
+			dest.x = xx;
+			dest.y = yy;
+
+			dest.w = src.w;
+			dest.h = src.h;
+
+			SDL_BlitSurface(images[IMG_FUZZ], &src, screen, &dest);
+		}
+	}
 }
 
 /* Set video mode: */

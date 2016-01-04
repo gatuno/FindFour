@@ -91,6 +91,17 @@ enum {
 	
 	IMG_CHAT_MINI,
 	
+	IMG_WINDOW_ERROR,
+	IMG_BUTTON_ERROR_UP,
+	IMG_BUTTON_ERROR_OVER,
+	IMG_BUTTON_ERROR_DOWN,
+	
+	IMG_BUTTON_NORMAL_UP,
+	IMG_BUTTON_NORMAL_OVER,
+	IMG_BUTTON_NORMAL_DOWN,
+	
+	IMG_FUZZ,
+	
 	NUM_IMAGES
 };
 
@@ -151,6 +162,7 @@ void set_last_window (Ventana *v);
 
 void start_drag (Ventana *v, int offset_x, int offset_y);
 void stop_drag (Ventana *v);
+void full_stop_drag (void);
 
 #endif /* __FINDFOUR_H__ */
 
