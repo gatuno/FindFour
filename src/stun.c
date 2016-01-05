@@ -34,6 +34,7 @@
 #include <sys/types.h>
 
 #include "stun.h"
+#include "message.h"
 
 void build_binding_request (StunMessage* msg, int change_port, int change_ip, int id) {
 	int g, r;
@@ -98,6 +99,131 @@ int encode_stun_message (const StunMessage *msg, char *buf, unsigned int buf_len
 	return pos;
 }
 
+int stunParseAttr (const char *buffer, int buffer_len, StunAtrAddress4 *result) {
+	uint16_t nport;
+	uint32_t naddr;
+	
+	if (buffer_len != 8) {
+		printf ("Atributo con longitud equivocada\n");
+		return 0;
+	}
+	result->pad = *buffer++;
+	result->family = *buffer++;
+	
+	if (result->family == IPv4Family) {
+		memcpy (&nport, buffer, 2);
+		buffer += 2;
+		result->port = ntohs (nport);
+		
+		memcpy (&naddr, buffer, 4);
+		buffer += 4;
+		result->addr = ntohl (naddr);
+		return 1;
+	} else if (result->family == IPv6Family) {
+		printf ("IPv6 no soportado\n");
+		return 0;
+	} else {
+		printf ("Familia no soportada\n");
+	}
+	
+	return 0;
+}
+
+void parse_stun_message (const char *buffer, int buffer_len) {
+	StunMessage stun_msg;
+	const char *body;
+	int size;
+	StunAtrHdr *attr;
+	int attrLen;
+	int attrType;
+	char ip_addr[20];
+	
+	memset (&stun_msg, 0, sizeof (stun_msg));
+	
+	if (sizeof (StunMsgHdr) > buffer_len) {
+		printf ("Bad STUN Message\n");
+		return;
+	}
+	
+	memcpy (&stun_msg.msgHdr, buffer, sizeof (StunMsgHdr));
+	stun_msg.msgHdr.msgType = ntohs (stun_msg.msgHdr.msgType);
+	stun_msg.msgHdr.msgLength = ntohs (stun_msg.msgHdr.msgLength);
+	
+	if (stun_msg.msgHdr.msgLength + sizeof (StunMsgHdr) != buffer_len) {
+		printf ("Wrong Stun len\n");
+		return;
+	}
+	
+	body = buffer + sizeof (StunMsgHdr);
+	size = stun_msg.msgHdr.msgLength;
+	
+	while (size > 0) {
+		attr = (StunAtrHdr *) body;
+		
+		attrLen = ntohs (attr->length);
+		attrType = ntohs (attr->type);
+		
+		if (attrLen + 4 > size) {
+			printf ("Atributo es más largo que el mensaje\n");
+			return;
+		}
+		
+		body += 4;
+		size -= 4;
+		
+		switch (attrType) {
+			case MappedAddress:
+				if (stunParseAttr (body, attrLen, &stun_msg.mappedAddress)) {
+					stun_msg.hasMappedAddress = 1;
+				} else {
+					return;
+				}
+				break;
+			case ResponseAddress:
+				if (stunParseAttr (body, attrLen, &stun_msg.responseAddress)) {
+					stun_msg.hasMappedAddress = 1;
+				} else {
+					return;
+				}
+				break;
+			case SourceAddress:
+				if (stunParseAttr (body, attrLen, &stun_msg.sourceAddress)) {
+					stun_msg.hasMappedAddress = 1;
+				} else {
+					return;
+				}
+				break;
+			case ChangedAddress:
+				if (stunParseAttr (body, attrLen, &stun_msg.changedAddress)) {
+					stun_msg.hasMappedAddress = 1;
+				} else {
+					return;
+				}
+				break;
+			case XorOnly:
+				stun_msg.xorOnly = 1;
+				break;
+			
+		}
+		
+		body += attrLen;
+		size -= attrLen;
+	}
+	
+	struct in_addr sin_addr;
+	
+	/* Si el mensaje se pudo analizar, decidir cuál mensaje es */
+	if (stun_msg.msgHdr.msgType == 0x0101 && stun_msg.msgHdr.id[0] == 0x03 && stun_msg.hasMappedAddress) {
+		sin_addr.s_addr = htonl (stun_msg.mappedAddress.addr);
+#ifdef __MINGW32__
+		strcpy (ip_addr, inet_ntoa (sin_addr));
+#else
+		inet_ntop (AF_INET, &sin_addr, ip_addr, sizeof (ip_addr));
+#endif
+		message_add (MSG_NORMAL, "¡Felicidades!\nSe ha detectado que puedes jugar en linea\nTu dirección IP es: %s\n", ip_addr);
+	}
+}
+
 void try_stun_binding (const char *server, int fd_socket) {
 	char host[520];
 	struct hostent *h;
@@ -132,15 +258,24 @@ void try_stun_binding (const char *server, int fd_socket) {
 		return;
 	}
 	
-	build_binding_request (&stun_msg, 0, 0, 0x0c);
-	
-	len_msg = encode_stun_message (&stun_msg, buffer, sizeof (buffer));
-	
 	stun_addr.sin_family = h->h_addrtype;
 	stun_addr.sin_port = htons (port);
 	
 	memcpy (&(stun_addr.sin_addr), h->h_addr, h->h_length);
 	
+	/* Enviar un same-port, same-address */
+	build_binding_request (&stun_msg, 0, 0, 0x01);
+	len_msg = encode_stun_message (&stun_msg, buffer, sizeof (buffer));
+	sendto (fd_socket, buffer, len_msg, 0, (struct sockaddr *) &stun_addr, sizeof (stun_addr));
+	
+	/* Enviar un different-port, same-address */
+	build_binding_request (&stun_msg, 1, 0, 0x02);
+	len_msg = encode_stun_message (&stun_msg, buffer, sizeof (buffer));
+	sendto (fd_socket, buffer, len_msg, 0, (struct sockaddr *) &stun_addr, sizeof (stun_addr));
+	
+	/* Enviar un different-port, different-address */
+	build_binding_request (&stun_msg, 1, 1, 0x03);
+	len_msg = encode_stun_message (&stun_msg, buffer, sizeof (buffer));
 	sendto (fd_socket, buffer, len_msg, 0, (struct sockaddr *) &stun_addr, sizeof (stun_addr));
 	
 	/* Cuando llegue la respuesta, guardar la IP */

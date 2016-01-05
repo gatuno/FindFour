@@ -30,6 +30,10 @@
 #define SharedSecretResponseMsg      0x0102
 #define SharedSecretErrorResponseMsg 0x0112
 
+/// define a structure to hold a stun address
+#define IPv4Family 0x01
+#define IPv6Family 0x02
+
 #define ChangeIpFlag   0x04
 #define ChangePortFlag 0x02
 
@@ -125,6 +129,7 @@ typedef struct {
 } StunMessage;
 
 void try_stun_binding (const char *server, int fd_socket);
+void parse_stun_message (const char *buffer, int buffer_len);
 
 #endif /* __STUN_H__ */
 

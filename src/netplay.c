@@ -766,6 +766,12 @@ void process_netevent (void) {
 		
 		if (len < 0) break;
 		
+		/* Detectar si este es un paquete STUN */
+		if (buffer[0] == 0x01) {
+			parse_stun_message (buffer, len);
+			continue;
+		}
+		
 		if (unpack (&message, buffer, len) < 0) {
 			printf ("Recibí un paquete mal estructurado\n");
 			continue;
