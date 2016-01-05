@@ -43,6 +43,7 @@
 #include "juego.h"
 #include "netplay.h"
 #include "stun.h"
+#include "message.h"
 
 #define MULTICAST_IPV4_GROUP "224.0.0.133"
 #define MULTICAST_IPV6_GROUP "FF02::224:0:0:133"
@@ -88,6 +89,7 @@ int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
 #ifdef __MINGW32__
 int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
+	struct sockaddr_in *ipv4;
 	struct ip_mreq mcast_req;
 	struct ipv6_mreq mcast_req6;
 	unsigned char g;
@@ -167,7 +169,6 @@ void findfour_netclose (void) {
 int findfour_netinit (int puerto) {
 	struct sockaddr_storage bind_addr;
 	struct sockaddr_in6 *ipv6;
-	struct sockaddr_in *ipv4;
 	struct ip_mreq mcast_req;
 	struct ipv6_mreq mcast_req6;
 	unsigned char g;
@@ -494,6 +495,56 @@ void enviar_fin_ack (Juego *juego) {
 	juego->estado = NET_CLOSED;
 }
 
+void enviar_keep_alive (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	
+	/* Rellenar con la firma del protocolo FF */
+	buffer_send[0] = buffer_send[1] = 'F';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_KEEP_ALIVE;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	printf ("Envié keep alive para ver si sigue vivo.\n");
+}
+
+void enviar_keep_alive_ack (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	
+	/* Rellenar con la firma del protocolo FF */
+	buffer_send[0] = buffer_send[1] = 'F';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_KEEP_ALIVE_ACK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	printf ("Respondí con un Keep Alive ACK\n");
+}
+
 int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	uint16_t temp;
 	
@@ -594,7 +645,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		memcpy (&temp, &buffer[6], sizeof (temp));
 		msg->remote = ntohs (temp);
 		
-		msg->fin = buffer[9];
+		msg->fin = buffer[8];
 	} else if (msg->type == TYPE_FIN_ACK) {
 		if (len < 8) return -1;
 		
@@ -612,6 +663,26 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		strncpy (msg->nick, &buffer[4], sizeof (char) * NICK_SIZE);
 	} else if (msg->type == TYPE_MCAST_FIN) {
 		/* Ningún dato extra */
+	} else if (msg->type == TYPE_KEEP_ALIVE) {
+		if (len < 8) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+	} else if (msg->type == TYPE_KEEP_ALIVE_ACK) {
+		if (len < 8) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
 	} else {
 		return -1;
 	}
@@ -645,6 +716,7 @@ void check_for_retry (void) {
 				ventana->last_fin = NET_DISCONNECT_NETERROR;
 				ventana->retry = 0;
 				enviar_fin (ventana);
+				ventana->ventana.mostrar = FALSE;
 			}
 			continue;
 		}
@@ -661,6 +733,10 @@ void check_for_retry (void) {
 			} else if (ventana->estado == NET_WAIT_CLOSING) {
 				printf ("Reenviando FIN por timer\n");
 				enviar_fin (ventana);
+				ventana->retry++;
+			} else if (ventana->estado == NET_READY) {
+				printf ("Enviando Keep Alive\n");
+				enviar_keep_alive (ventana);
 				ventana->retry++;
 			}
 		}
@@ -763,18 +839,25 @@ void process_netevent (void) {
 			}
 			
 			if (message.type == TYPE_FIN) {
-				printf ("Recibí un fin\n");
+				if (message.fin == NET_USER_QUIT && ventana->nick_remoto[0] != 0) {
+					message_add (MSG_NORMAL, "%s ha cerrado la partida", ventana->nick_remoto);
+				} else {
+					message_add (MSG_ERROR, "La partida se ha cerrado\nErr: %i", message.fin);
+				}
 				enviar_fin_ack (ventana);
 				
 				/* Eliminar esta ventana */
 				eliminar_juego (ventana);
+			} else if (message.type == TYPE_KEEP_ALIVE) {
+				/* Keep alive en cualquier momento se responde con Keep Alive ACK */
+				enviar_keep_alive_ack (ventana);
 			} else if ((message.type == TYPE_RES_SYN && ventana->estado != NET_SYN_SENT) ||
 			    (message.type == TYPE_TRN && ventana->estado != NET_READY) ||
 			    (message.type == TYPE_TRN_ACK && ventana->estado != NET_WAIT_ACK) ||
 			    (message.type == TYPE_TRN_ACK_GAME && ventana->estado != NET_WAIT_WINNER) ||
-			    (message.type == TYPE_FIN_ACK && ventana->estado != NET_WAIT_CLOSING)) {
+			    (message.type == TYPE_FIN_ACK && ventana->estado != NET_WAIT_CLOSING) ||
+			    (message.type == TYPE_KEEP_ALIVE_ACK && ventana->estado != NET_READY)) {
 				printf ("Paquete en el momento incorrecto\n");
-				break;
 			} else if (message.type == TYPE_RES_SYN) {
 				/* Copiar el nick del otro jugador */
 				recibir_nick (ventana, message.nick);
@@ -802,6 +885,8 @@ void process_netevent (void) {
 				/* La última confirmación que necesitaba */
 				/* Eliminar esta ventana */
 				eliminar_juego (ventana);
+			} else if (message.type == TYPE_KEEP_ALIVE_ACK) {
+				ventana->retry = 0;
 			}
 			break;
 		}

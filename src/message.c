@@ -59,7 +59,7 @@ void message_add (int tipo, const char *cadena, ...) {
 	new->text_image = draw_text (ttf16_comiccrazy, new->msg, &blanco);
 	
 	/* Ancho mínimo 48, más múltiplos de 8 */
-	if (new->text_image->w > 216) {
+	if (new->text_image->w > 152) {
 		g = (new->text_image->w / 8) + 3;
 		new->w = 40 + (g * 8);
 	} else {

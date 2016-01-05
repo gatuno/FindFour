@@ -40,6 +40,7 @@
 #include "netplay.h"
 #include "cp-button.h"
 #include "draw-text.h"
+#include "message.h"
 
 int juego_mouse_down (Juego *j, int x, int y, int **button_map);
 int juego_mouse_motion (Juego *j, int x, int y, int **button_map);
@@ -253,6 +254,12 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			
 			if (j->win != 0 || j->turno == 42) {
 				j->estado = NET_WAIT_WINNER;
+				if (j->win != 0) {
+					/* Somos ganadores */
+					message_add (MSG_NORMAL, "Has ganado la partida");
+				} else {
+					message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
+				}
 			}
 		}
 	}
@@ -424,9 +431,11 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 			/* Buscar un ganador, si lo hay, enviar el ACK_GAME */
 			if (j->win != 0) {
 				enviar_mov_ack_finish (j, GAME_FINISH_LOST);
+				message_add (MSG_NORMAL, "%s ha ganado la partida", j->nick_remoto);
 				j->estado = NET_CLOSED;
 			} else if (j->turno == 42) {
 				enviar_mov_ack_finish (j, GAME_FINISH_TIE);
+				message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
 				j->estado = NET_CLOSED;
 			} else {
 				enviar_mov_ack (j);

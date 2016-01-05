@@ -369,7 +369,7 @@ int game_loop (void) {
 	drag = NULL;
 	
 	if (findfour_netinit (server_port) < 0) {
-		/* FIXME: Mostrar ventana de error */
+		fprintf (stderr, "Falló al inicializar la red\n");
 		
 		return GAME_QUIT;
 	}
@@ -377,7 +377,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		ventana = (Ventana *) crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global);
+		crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global);
 	}
 	
 	SDL_EnableUNICODE (1);

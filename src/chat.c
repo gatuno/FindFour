@@ -52,6 +52,7 @@ static Chat *static_chat = NULL;
 void inicializar_chat (void) {
 	Chat *c;
 	int g;
+	SDL_Color color;
 	
 	c = (Chat *) malloc (sizeof (Chat));
 	
@@ -78,9 +79,14 @@ void inicializar_chat (void) {
 		c->buddys[g] = IMG_SHADOW_UP;
 	}
 	
+	color.r = color.g = color.b = 0xff;
+	
+	/* La lista de jugadores multicast locales */
 	c->buddy_mcast = NULL;
 	c->buddy_mcast_count = 0;
+	c->mcast_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, "Red local", color);
 	
+	/* Cuál de las listas se despliega */
 	c->list_display = CHAT_LIST_MCAST;
 	c->list_offset = 0;
 	
@@ -329,6 +335,13 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 	
 	/* Desplegar la lista correspondiente */
 	if (c->list_display == CHAT_LIST_MCAST) {
+		rect.x = c->ventana.x + (images[IMG_WINDOW_CHAT]->w - c->mcast_text->w) / 2;
+		rect.y = c->ventana.y + 36;
+		rect.w = c->mcast_text->w;
+		rect.h = c->mcast_text->h;
+		
+		SDL_BlitSurface (c->mcast_text, NULL, screen, &rect);
+		
 		buddy = c->buddy_mcast;
 		
 		g = 0;

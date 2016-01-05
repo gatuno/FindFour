@@ -77,10 +77,12 @@ typedef struct _Chat {
 	/* Los buddys encontrados por red */
 	BuddyMCast *buddy_mcast;
 	int buddy_mcast_count;
+	SDL_Surface *mcast_text;
 } Chat;
 
 void inicializar_chat (void);
 void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock);
+void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock);
 void show_chat (void);
 
 #endif /* __CHAT_H__ */
