@@ -51,17 +51,15 @@ void juego_draw (Juego *j, SDL_Surface *screen);
 const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
 const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 
-Juego *crear_juego (void) {
+Juego *crear_juego (int top_window) {
 	Juego *j;
-	static int start = 0;
+	static int start_x = 0, start_y = 0;
 	Juego *lista;
 	int correct;
 	
 	/* Crear una nueva ventana */
 	j = (Juego *) malloc (sizeof (Juego));
 	
-	j->ventana.prev = NULL;
-	j->ventana.next = get_first_window ();
 	j->ventana.w = 232; /* FIXME: Arreglar esto */
 	j->ventana.h = 324;
 	
@@ -81,8 +79,21 @@ Juego *crear_juego (void) {
 	j->resalte = -1;
 	j->timer = 0;
 	j->close_frame = IMG_BUTTON_CLOSE_UP;
-	start += 20;
-	j->ventana.x = j->ventana.y = start;
+	
+	if (start_y + j->ventana.h >= 480) {
+		start_y = 0;
+		start_x += 20;
+	}
+	
+	if (start_x + j->ventana.w >= 760) {
+		start_x = 0;
+	}
+	
+	j->ventana.x = start_x;
+	j->ventana.y = start_y;
+	
+	start_x += 20;
+	start_y += 20;
 	
 	j->local = j->remote = 0;
 	j->retry = 0;
@@ -96,13 +107,31 @@ Juego *crear_juego (void) {
 	j->nick_remoto_image = NULL;
 	j->nick_remoto_image_blue = NULL;
 	
-	if (get_first_window () == NULL) {
-		set_last_window ((Ventana *) j);
-	} else {
-		get_first_window ()->prev = (Ventana *) j;
-	}
+	if (top_window || get_first_window () == NULL) {
+		/* Si pidieron ser ventana al frente, mostrarla */
+		j->ventana.prev = NULL;
+		j->ventana.next = get_first_window ();
+		if (get_first_window () == NULL) {
+			set_last_window ((Ventana *) j);
+		} else {
+			get_first_window ()->prev = (Ventana *) j;
+		}
 	
-	set_first_window ((Ventana *) j);
+		set_first_window ((Ventana *) j);
+	} else {
+		/* En caso contrario, mandarla hacia abajo de la primera ventana */
+		j->ventana.prev = get_first_window ();
+		j->ventana.next = get_first_window ()->next;
+		
+		get_first_window ()->next = (Ventana *) j;
+		
+		/* Si tiene next, cambiar su prev */
+		if (j->ventana.next == NULL) {
+			set_last_window ((Ventana *) j);
+		} else {
+			j->ventana.next->prev = ((Ventana *) j);
+		}
+	}
 	
 	/* Generar un número local aleatorio */
 	do {
@@ -542,7 +571,11 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 	rect.w = nick_image->w;
 	rect.h = nick_image->h;
 	
-	SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, screen, &rect);
+	if (j->estado == NET_SYN_SENT) {
+		SDL_BlitSurface (nick_image_blue, NULL, screen, &rect);
+	} else {
+		SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, screen, &rect);
+	}
 	
 	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
 	if (j->estado != NET_SYN_SENT) {

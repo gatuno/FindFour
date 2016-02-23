@@ -812,7 +812,7 @@ void process_netevent (void) {
 			
 			/* Si no fué manejado es conexión nueva */
 			printf ("Nueva conexión entrante\n");
-			ventana = crear_juego ();
+			ventana = crear_juego (FALSE);
 		
 			/* Copiar la dirección IP del peer */
 			memcpy (&ventana->peer, &peer, peer_socklen);

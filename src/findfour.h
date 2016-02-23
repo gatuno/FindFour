@@ -157,6 +157,7 @@ extern Mix_Chunk * sounds[NUM_SOUNDS];
 extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy;
 
 Ventana *get_first_window (void);
+Ventana *get_last_window (void);
 void set_first_window (Ventana *v);
 void set_last_window (Ventana *v);
 

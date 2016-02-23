@@ -178,6 +178,10 @@ Ventana *get_first_window (void) {
 	return primero;
 }
 
+Ventana *get_last_window (void) {
+	return ultimo;
+}
+
 void set_first_window (Ventana *v) {
 	primero = v;
 }
@@ -303,7 +307,7 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	
 	if (valido) {
 		/* Pasar a intentar hacer una conexión */
-		ventana = (Ventana *) crear_juego ();
+		ventana = (Ventana *) crear_juego (TRUE);
 	
 		conectar_con ((Juego *) ventana, nick_global, hostname, puerto);
 	} else {

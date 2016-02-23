@@ -245,7 +245,7 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 						g++;
 					}
 					Juego *j;
-					j = crear_juego ();
+					j = crear_juego (TRUE);
 					conectar_con_sockaddr (j, nick_global, (struct sockaddr *)&buddy->cliente, buddy->tamsock);
 				}
 				

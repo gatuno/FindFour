@@ -69,7 +69,7 @@ typedef struct _Juego {
 } Juego;
 
 /* Funciones públicas */
-Juego *crear_juego (void);
+Juego *crear_juego (int top_window);
 void eliminar_juego (Juego *);
 void recibir_movimiento (Juego *, int turno, int col, int fila);
 void buscar_ganador (Juego *j);
