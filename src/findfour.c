@@ -165,7 +165,7 @@ SDL_Surface * nick_image_blue = NULL;
 int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
 
-static Ventana *primero, *ultimo, *drag;
+static Ventana *primero, *ultimo, *drag, *connect_window;
 static int drag_x, drag_y;
 
 int server_port;
@@ -301,6 +301,13 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	char *hostname;
 	Ventana *ventana;
 	
+	if (strcmp (texto, "") == 0) {
+		/* Texto vacio, ignorar */
+		/* Eliminar esta ventana de texto */
+		eliminar_inputbox (ib);
+		connect_window = NULL;
+		return;
+	}
 	hostname = strdup (texto);
 	
 	valido = analizador_hostname_puerto (texto, hostname, &puerto);
@@ -318,6 +325,11 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	
 	/* Eliminar esta ventana de texto */
 	eliminar_inputbox (ib);
+	connect_window = NULL;
+}
+
+void cancelar_conexion (InputBox *ib, const char *texto) {
+	connect_window = NULL;
 }
 
 int main (int argc, char *argv[]) {
@@ -367,6 +379,7 @@ int game_loop (void) {
 	primero = NULL;
 	ultimo = NULL;
 	Ventana *ventana, *next;
+	Juego *j;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
 	
@@ -381,7 +394,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global);
+		crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, NULL);
 	}
 	
 	SDL_EnableUNICODE (1);
@@ -415,7 +428,32 @@ int game_loop (void) {
 					/* Si el evento aún no ha sido manejado por alguna ventana, es de nuestro interés */
 					if (!manejado) {
 						if (event.key.keysym.sym == SDLK_F5) {
-							ventana = (Ventana *) crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "");
+							if (connect_window != NULL) {
+								/* Levantar la ventana de conexión al frente */
+								if (connect_window != primero) {
+									/* Desligar completamente */
+									if (connect_window->prev != NULL) {
+										connect_window->prev->next = connect_window->next;
+									} else {
+										primero = connect_window->next;
+									}
+								
+									if (connect_window->next != NULL) {
+										connect_window->next->prev = connect_window->prev;
+									} else {
+										ultimo = connect_window->prev;
+									}
+								
+									/* Levantar la ventana a primer plano */
+									connect_window->next = primero;
+									primero->prev = connect_window;
+									connect_window->prev = NULL;
+									primero = connect_window;
+								}
+							} else {
+								/* Crear un input box para conectar */
+								connect_window = (Ventana *) crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "", cancelar_conexion);
+							}
 						} else if (event.key.keysym.sym == SDLK_F8) {
 							show_chat ();
 						}
@@ -618,7 +656,16 @@ int game_loop (void) {
 	} while (!done);
 	SDL_EnableUNICODE (0);
 	
-	/* FIXME: Recorrer todas las ventanas y enviar un fin a todas las ventanas de juego */
+	for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
+		if (ventana->tipo != WINDOW_GAME) continue;
+		
+		j = (Juego *) ventana;
+		if (j->estado != NET_CLOSED) {
+			j->last_fin = NET_USER_QUIT;
+			j->retry = 0;
+			enviar_fin (j);
+		}
+	}
 	
 	findfour_netclose ();
 	

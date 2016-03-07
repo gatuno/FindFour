@@ -36,7 +36,7 @@ int inputbox_mouse_up (InputBox *ib, int x, int y, int **button_map);
 void inputbox_draw (InputBox *ib, SDL_Surface *screen);
 int inputbox_key_down (InputBox *ib, SDL_KeyboardEvent *);
 
-InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) {
+InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, InputBoxFunc close_func) {
 	InputBox *ib;
 	SDL_Color blanco;
 	blanco.r = blanco.g = blanco.b = 255;
@@ -80,6 +80,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text) 
 	
 	ib->ventana.w = 144 + ((ib->text_ask->w / 16) + 1) * 16;
 	ib->callback = func;
+	ib->close_callback = close_func;
 	
 	if (get_first_window () == NULL) {
 		set_first_window ((Ventana *) ib);
@@ -108,10 +109,10 @@ void eliminar_inputbox (InputBox *ib) {
 	}
 	
 	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
-	if (cp_old_map == &(ib->close_frame)) {
+	if (cp_old_map == &(ib->close_frame) || cp_old_map == &(ib->send_frame)) {
 		cp_old_map = NULL;
 	}
-	if (cp_last_button == &(ib->send_frame)) {
+	if (cp_last_button == &(ib->send_frame) || cp_last_button == &(ib->close_frame)) {
 		cp_last_button = NULL;
 	}
 	
@@ -184,6 +185,9 @@ int inputbox_mouse_up (InputBox *ib, int x, int y, int **button_map) {
 	if (y >= 30 && y < 58 && x >= ib->ventana.w - 42 && x < ib->ventana.w - 14) {
 		*button_map = &(ib->close_frame);
 		if (cp_button_up (*button_map)) {
+			if (ib->close_callback != NULL) {
+				ib->close_callback (ib, ib->buffer);
+			}
 			eliminar_inputbox (ib);
 		}
 		return TRUE;
