@@ -382,7 +382,6 @@ void buscar_ganador (Juego *j) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
 					j->win_fila = 5 - h;
-					printf ("// Ganador de búsqueda: col %i, %i\n", g, h);
 					j->win_dir = 2;
 				}
 			}
@@ -399,7 +398,6 @@ void buscar_ganador (Juego *j) {
 					j->win = j->tablero[h][g];
 					j->win_col = g;
 					j->win_fila = 5 - h;
-					printf ("\\\\ Ganador de búsqueda: col %i, %i\n", g, h);
 					j->win_dir = 4;
 				}
 			}
