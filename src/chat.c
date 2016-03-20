@@ -403,6 +403,8 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 			}
 			nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf14_facefront, buffer, blanco);
 			
+			/* Actualizar el "last_seen" */
+			nuevo->last_seen = SDL_GetTicks();
 			return;
 		}
 		nuevo = nuevo->next;
@@ -429,34 +431,66 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 		sprintf (buffer, "%s [???]", nick);
 	}
 	nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf14_facefront, buffer, blanco);
+	nuevo->last_seen = SDL_GetTicks();
 	
-	printf ("Posible partida de nombre: %s\n", nick);
 	static_chat->buddy_mcast_count++;
 }
 
+void buddy_list_mcast_remove_item (BuddyMCast *item) {
+	BuddyMCast *prev;
+	
+	if (item == static_chat->buddy_mcast) {
+		/* Principio de la lista */
+		static_chat->buddy_mcast = item->next;
+	} else {
+		prev = static_chat->buddy_mcast;
+		
+		while (prev->next != item) prev = prev->next;
+		
+		prev->next = item->next;
+	}
+	static_chat->buddy_mcast_count--;
+	
+	if (static_chat->list_display == CHAT_LIST_MCAST && static_chat->list_offset >= static_chat->buddy_mcast_count) {
+		if (static_chat->list_offset > 0) static_chat->list_offset -= 8;
+	}
+	
+	free (item);
+}
+
 void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock) {
-	BuddyMCast *this, *prev;
+	BuddyMCast *this;
 	
 	/* Tratar de encontrar el buddy, pero ignorar si no aparece */
-	prev = this = static_chat->buddy_mcast;
+	this = static_chat->buddy_mcast;
 	
 	while (this != NULL) {
 		if (sockaddr_cmp (direccion, (struct sockaddr *) &(this->cliente)) == 0) {
-			/* Eliminar este item */
-			if (this == static_chat->buddy_mcast) {
-				static_chat->buddy_mcast = this->next;
-			} else {
-				prev->next = this->next;
-			}
-			static_chat->buddy_mcast_count--;
-			
-			if (static_chat->list_display == CHAT_LIST_MCAST && static_chat->list_offset >= static_chat->buddy_mcast_count) {
-				if (static_chat->list_offset > 0) static_chat->list_offset -= 8;
-			}
-			free (this);
+			buddy_list_mcast_remove_item (this);
 			break;
 		}
 		this = this->next;
-		if (prev != static_chat->buddy_mcast) prev = prev->next;
 	}
 }
+
+void buddy_list_mcast_clean (Uint32 timestamp) {
+	BuddyMCast *this, *next;
+	
+	/* Recorrer todos los buddys */
+	this = static_chat->buddy_mcast;
+	
+	while (this != NULL) {
+		/* Si el timestamp supera a los 40 segundos, borrar el buddy */
+		if (timestamp > this->last_seen + NET_MCAST_TIMEOUT) {
+			/* Eliminar este item */
+			next = this->next;
+			buddy_list_mcast_remove_item (this);
+			
+			this = next;
+			continue;
+		}
+		this = this->next;
+	}
+}
+
+

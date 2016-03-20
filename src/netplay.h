@@ -36,8 +36,8 @@
 #include "juego.h"
 
 #define NET_CONN_TIMER 3400
-#define NET_READY_TIMER 4950
 #define NET_MCAST_TIMER 12000
+#define NET_MCAST_TIMEOUT 40000
 
 enum {
 	TYPE_SYN = 1,

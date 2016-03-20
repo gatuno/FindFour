@@ -221,6 +221,7 @@ int findfour_netinit (int puerto) {
 		return -1;
 	}
 	
+	memset (&bind_addr, 0, sizeof (bind_addr));
 	ipv6 = (struct sockaddr_in6 *) &bind_addr;
 	
 	ipv6->sin6_family = AF_INET6;
@@ -243,6 +244,7 @@ int findfour_netinit (int puerto) {
 	
 	/* Hacer join a los grupos multicast */
 	/* Primero join al IPv4 */
+	memset (&mcast_req, 0, sizeof (mcast_req));
 	mcast_addr.sin_family = AF_INET;
 	mcast_addr.sin_port = htons (puerto);
 
@@ -786,6 +788,7 @@ void check_for_retry (void) {
 	if (now_time > multicast_timer + NET_MCAST_TIMER) {
 		enviar_broadcast_game (nick_global);
 		multicast_timer = now_time;
+		buddy_list_mcast_clean (now_time);
 	}
 }
 
