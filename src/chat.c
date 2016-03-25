@@ -74,6 +74,7 @@ void inicializar_chat (void) {
 	c->up_frame = IMG_BUTTON_ARROW_1_UP;
 	c->down_frame = IMG_BUTTON_ARROW_2_UP;
 	c->broadcast_list_frame = IMG_BUTTON_LIST_UP;
+	c->recent_list_frame = IMG_BUTTON_LIST_UP;
 	
 	for (g = 0; g < 8; g++) {
 		c->buddys[g] = IMG_SHADOW_UP;
@@ -85,6 +86,11 @@ void inicializar_chat (void) {
 	c->buddy_mcast = NULL;
 	c->buddy_mcast_count = 0;
 	c->mcast_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, "Red local", color);
+	
+	/* La lista de jugadores recientes */
+	c->buddy_recent = NULL;
+	c->buddy_recent_count = 0;
+	c->recent_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, "Recientes", color);
 	
 	/* Cuál de las listas se despliega */
 	c->list_display = CHAT_LIST_MCAST;
@@ -126,8 +132,12 @@ int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
 		*button_map = &(c->down_frame);
 		return TRUE;
 	}
-	if (x >= 102 && x < 130 && y >= 275 && y < 303){
+	if (x >= 102 && x < 130 && y >= 275 && y < 303) {
 		*button_map = &(c->broadcast_list_frame);
+		return TRUE;
+	}
+	if (x >= 134 && x < 162 && y >= 275 && y < 303) {
+		*button_map = &(c->recent_list_frame);
 		return TRUE;
 	}
 	/* Los 8 buddys */
@@ -167,6 +177,10 @@ int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
 		*button_map = &(c->broadcast_list_frame);
 		return TRUE;
 	}
+	if (x >= 134 && x < 162 && y >= 275 && y < 303) {
+		*button_map = &(c->recent_list_frame);
+		return TRUE;
+	}
 	/* Los 8 buddys */
 	if (x >= 18 && x < 188 && y >= 65 && y < 272) {
 		g = (y - 65);
@@ -185,6 +199,8 @@ int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
 int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 	int g, h;
 	BuddyMCast *buddy;
+	RecentPlay *recent;
+	Juego *j;
 	if (c->ventana.mostrar == FALSE) return FALSE;
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
@@ -226,6 +242,16 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 		}
 		return TRUE;
 	}
+	if (x >= 134 && x < 162 && y >= 275 && y < 303) {
+		*button_map = &(c->recent_list_frame);
+		if (cp_button_up (*button_map)) {
+			if (c->list_display != CHAT_LIST_RECENT) {
+				c->list_offset = 0;
+				c->list_display = CHAT_LIST_RECENT;
+			}
+		}
+		return TRUE;
+	}
 	/* Los 8 buddys */
 	if (x >= 18 && x < 188 && y >= 65 && y < 272) {
 		g = (y - 65);
@@ -244,9 +270,26 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 						buddy = buddy->next;
 						g++;
 					}
-					Juego *j;
 					j = crear_juego (TRUE);
 					conectar_con_sockaddr (j, nick_global, (struct sockaddr *)&buddy->cliente, buddy->tamsock);
+				} else if (c->list_display == CHAT_LIST_RECENT && h < c->buddy_recent_count) {
+					/* Recorrer la lista */
+					recent = c->buddy_recent;
+					
+					g = 0;
+					while (g < h) {
+						recent = recent->next;
+						g++;
+					}
+					
+					char *hostname = strdup (recent->buffer);
+					int puerto;
+					
+					analizador_hostname_puerto (recent->buffer, hostname, &puerto);
+					j = crear_juego (TRUE);
+		
+					conectar_con (j, nick_global, hostname, puerto);
+					free (hostname);
 				}
 				
 				/* Revisar otras listas */
@@ -261,9 +304,10 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 }
 
 void chat_draw (Chat *c, SDL_Surface *screen) {
-	SDL_Rect rect;
+	SDL_Rect rect, rect2;
 	int g, h;
 	BuddyMCast *buddy;
+	RecentPlay *recent;
 	
 	if (azul1 == 0) {
 		azul1 = SDL_MapRGB (screen->format, 0, 0x52, 0x9B);
@@ -323,6 +367,21 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 	
 	SDL_BlitSurface (images[IMG_LIST_MINI], NULL, screen, &rect);
 	
+	/* Recent list */
+	rect.x = c->ventana.x + 134;
+	rect.y = c->ventana.y + 275;
+	rect.w = images[IMG_BUTTON_LIST_UP]->w;
+	rect.h = images[IMG_BUTTON_LIST_UP]->h;
+	
+	SDL_BlitSurface (images[c->recent_list_frame], NULL, screen, &rect);
+	
+	rect.x = c->ventana.x + 141;
+	rect.y = c->ventana.y + 281;
+	rect.w = images[IMG_LIST_MINI]->w;
+	rect.h = images[IMG_LIST_MINI]->h;
+	
+	SDL_BlitSurface (images[IMG_LIST_RECENT_MINI], NULL, screen, &rect);
+	
 	/* Los 8 buddys */
 	for (g = 0; g < 8; g++) {
 		rect.x = c->ventana.x + 18;
@@ -368,6 +427,45 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 			h = h + 26;
 			g++;
 			buddy = buddy->next;
+		}
+	} else if (c->list_display == CHAT_LIST_RECENT) {
+		rect.x = c->ventana.x + (images[IMG_WINDOW_CHAT]->w - c->recent_text->w) / 2;
+		rect.y = c->ventana.y + 36;
+		rect.w = c->mcast_text->w;
+		rect.h = c->mcast_text->h;
+		
+		SDL_BlitSurface (c->recent_text, NULL, screen, &rect);
+		
+		recent = c->buddy_recent;
+		
+		g = 0;
+		while (g < c->list_offset && recent != NULL) {
+			recent = recent->next;
+			g++;
+		}
+		h = c->ventana.y + 65;
+		g = 0;
+		while (g < 8 && recent != NULL) {
+			rect.x = c->ventana.x + 26;
+			rect.y = h + 3;
+			rect.w = images[IMG_LIST_BIG]->w;
+			rect.h = images[IMG_LIST_BIG]->h;
+			
+			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
+			
+			rect2.x = rect2.y = 0;
+			rect2.h = recent->text->h;
+			rect2.w = (recent->text->w > 142 ? 142 : recent->text->w);
+			
+			rect.x = c->ventana.x + 46;
+			rect.y = h + 5;
+			rect.w = (recent->text->w > 142 ? 142 : recent->text->w);
+			rect.h = recent->text->h;
+			SDL_BlitSurface (recent->text, &rect2, screen, &rect);
+			
+			h = h + 26;
+			g++;
+			recent = recent->next;
 		}
 	}
 }
@@ -493,4 +591,28 @@ void buddy_list_mcast_clean (Uint32 timestamp) {
 	}
 }
 
+void buddy_list_recent_add (const char *texto) {
+	RecentPlay *nuevo;
+	char buffer[256];
+	SDL_Color blanco = {255, 255, 255};
+	
+	/* Buscar entre los buddys locales que no esté duplicado */
+	nuevo = static_chat->buddy_recent;
+	
+	while (nuevo != NULL) {
+		if (strcmp (texto, nuevo->buffer) == 0) return;
+		
+		nuevo = nuevo->next;
+	}
+	
+	nuevo = (RecentPlay *) malloc (sizeof (RecentPlay));
+	
+	nuevo->next = static_chat->buddy_recent;
+	static_chat->buddy_recent = nuevo;
+	
+	strncpy (nuevo->buffer, texto, sizeof (nuevo->buffer));
+	
+	nuevo->text = TTF_RenderUTF8_Blended (ttf14_facefront, texto, blanco);
+	static_chat->buddy_recent_count++;
+}
 

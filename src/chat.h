@@ -38,6 +38,8 @@
 enum {
 	CHAT_LIST_MCAST = 0,
 	
+	CHAT_LIST_RECENT,
+	
 	NUM_CHAT_LIST
 };
 
@@ -54,7 +56,18 @@ typedef struct _BuddyMCast {
 	SDL_Surface *nick_chat;
 	
 	socklen_t tamsock;
+	Uint32 last_seen;
 } BuddyMCast;
+
+typedef struct _RecentPlay {
+	struct _RecentPlay *next;
+	
+	char nick[NICK_SIZE];
+	
+	/* La dirección del cliente */
+	char buffer[256];
+	SDL_Surface *text;
+} RecentPlay;
 
 typedef struct _Chat {
 	Ventana ventana;
@@ -68,6 +81,9 @@ typedef struct _Chat {
 	/* El botón de buddy locales */
 	int broadcast_list_frame;
 	
+	/* El botón de partidas recientes */
+	int recent_list_frame;
+	
 	/* Los 8 buddys buttons */
 	int buddys[8];
 	
@@ -80,6 +96,8 @@ typedef struct _Chat {
 	SDL_Surface *mcast_text;
 	
 	/* Las partidas recientes */
+	RecentPlay *buddy_recent;
+	int buddy_recent_count;
 	SDL_Surface *recent_text;
 } Chat;
 
@@ -87,6 +105,7 @@ void inicializar_chat (void);
 void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock);
 void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock);
 void buddy_list_mcast_clean (Uint32 timestamp);
+void buddy_list_recent_add (const char *texto);
 void show_chat (void);
 
 #endif /* __CHAT_H__ */

@@ -112,6 +112,7 @@ const char *images_names[NUM_IMAGES] = {
 	GAMEDATA_DIR "images/loading.png",
 	
 	GAMEDATA_DIR "images/list-mini.png",
+	GAMEDATA_DIR "images/recent-mini.png",
 	GAMEDATA_DIR "images/list-big.png",
 	
 	GAMEDATA_DIR "images/win-1.png",
@@ -315,7 +316,10 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	if (valido) {
 		/* Pasar a intentar hacer una conexión */
 		ventana = (Ventana *) crear_juego (TRUE);
-	
+		
+		/* Agregar la conexión a las partidas recientes */
+		buddy_list_recent_add (texto);
+		
 		conectar_con ((Juego *) ventana, nick_global, hostname, puerto);
 	} else {
 		/* Mandar un mensaje de error */
