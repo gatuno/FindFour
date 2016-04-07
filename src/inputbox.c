@@ -437,9 +437,9 @@ int inputbox_key_down (InputBox *ib, SDL_KeyboardEvent *key) {
 		return TRUE;
 	}
 	
-	if (key->keysym.unicode != 8 && (key->keysym.unicode < 32 || key->keysym.unicode == 127)) return TRUE; /* Tecla de eliminar */
+	if (key->keysym.sym != SDLK_BACKSPACE && (key->keysym.unicode < 32 || key->keysym.unicode == 127)) return TRUE; /* Tecla de eliminar */
 	
-	if (key->keysym.unicode == 8) {
+	if (key->keysym.sym == SDLK_BACKSPACE) {
 		/* Eliminar el último caracter */
 		len = u8_strlen (ib->buffer);
 		if (len == 0) return TRUE;

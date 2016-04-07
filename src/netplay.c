@@ -32,6 +32,16 @@
 #endif
 #include <sys/types.h>
 
+/**
+ * IPV6_ADD_MEMBERSHIP/IPV6_DROP_MEMBERSHIP may not be defined on OSX
+ */
+#ifdef MACOSX
+#	ifndef IPV6_ADD_MEMBERSHIP
+#		define IPV6_ADD_MEMBERSHIP     IPV6_JOIN_GROUP
+#		define IPV6_DROP_MEMBERSHIP    IPV6_LEAVE_GROUP
+#	endif
+#endif
+
 /* Para los sockets no-bloqueantes */
 #include <unistd.h>
 #include <fcntl.h>

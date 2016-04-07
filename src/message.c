@@ -35,7 +35,7 @@ typedef struct _Message {
 	int button_frame;
 	int x, y, w, h;
 	SDL_Surface *text_image;
-} Message;
+};
 
 Message *list_msg = NULL;
 

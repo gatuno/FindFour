@@ -41,3 +41,5 @@ po/stamp-po
 
 *.gmo
 *.mo
+
+etc/Info.plist

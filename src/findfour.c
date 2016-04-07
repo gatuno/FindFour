@@ -47,6 +47,8 @@
 #include "config.h"
 #endif
 
+#include "path.h"
+
 #include "findfour.h"
 #include "juego.h"
 #include "netplay.h"
@@ -69,78 +71,73 @@
 #define TRUE !FALSE
 #endif
 
-#ifdef WIN32
-#	undef GAMEDATA_DIR
-#	define GAMEDATA_DIR "./"
-#endif
-
 const char *images_names[NUM_IMAGES] = {
-	GAMEDATA_DIR "images/lodge.png",
-	GAMEDATA_DIR "images/lodge_fire.png",
-	GAMEDATA_DIR "images/lodge_candle.png",
+	"images/lodge.png",
+	"images/lodge_fire.png",
+	"images/lodge_candle.png",
 	
-	GAMEDATA_DIR "images/ventana.png",
-	GAMEDATA_DIR "images/tablero.png",
-	GAMEDATA_DIR "images/coinblue.png",
-	GAMEDATA_DIR "images/coinred.png",
+	"images/ventana.png",
+	"images/tablero.png",
+	"images/coinblue.png",
+	"images/coinred.png",
 	
-	GAMEDATA_DIR "images/bigcoinblue.png",
-	GAMEDATA_DIR "images/bigcoinred.png",
+	"images/bigcoinblue.png",
+	"images/bigcoinred.png",
 	
-	GAMEDATA_DIR "images/ventana-chat.png",
+	"images/ventana-chat.png",
 	
-	GAMEDATA_DIR "images/shadow-up.png",
-	GAMEDATA_DIR "images/shadow-over.png",
-	GAMEDATA_DIR "images/shadow-down.png",
+	"images/shadow-up.png",
+	"images/shadow-over.png",
+	"images/shadow-down.png",
 	
-	GAMEDATA_DIR "images/button-up.png",
-	GAMEDATA_DIR "images/button-over.png",
-	GAMEDATA_DIR "images/button-down.png",
+	"images/button-up.png",
+	"images/button-over.png",
+	"images/button-down.png",
 	
-	GAMEDATA_DIR "images/button-arrow-1-up.png",
-	GAMEDATA_DIR "images/button-arrow-1-over.png",
-	GAMEDATA_DIR "images/button-arrow-1-down.png",
+	"images/button-arrow-1-up.png",
+	"images/button-arrow-1-over.png",
+	"images/button-arrow-1-down.png",
 	
-	GAMEDATA_DIR "images/button-arrow-2-up.png",
-	GAMEDATA_DIR "images/button-arrow-2-over.png",
-	GAMEDATA_DIR "images/button-arrow-2-down.png",
+	"images/button-arrow-2-up.png",
+	"images/button-arrow-2-over.png",
+	"images/button-arrow-2-down.png",
 	
-	GAMEDATA_DIR "images/button-list-up.png",
-	GAMEDATA_DIR "images/button-list-over.png",
-	GAMEDATA_DIR "images/button-list-down.png",
+	"images/button-list-up.png",
+	"images/button-list-over.png",
+	"images/button-list-down.png",
 	
-	GAMEDATA_DIR "images/loading.png",
+	"images/loading.png",
 	
-	GAMEDATA_DIR "images/list-mini.png",
-	GAMEDATA_DIR "images/recent-mini.png",
-	GAMEDATA_DIR "images/list-big.png",
+	"images/list-mini.png",
+	"images/recent-mini.png",
+	"images/list-big.png",
 	
-	GAMEDATA_DIR "images/win-1.png",
-	GAMEDATA_DIR "images/win-2.png",
-	GAMEDATA_DIR "images/win-3.png",
-	GAMEDATA_DIR "images/win-4.png",
+	"images/win-1.png",
+	"images/win-2.png",
+	"images/win-3.png",
+	"images/win-4.png",
 	
-	GAMEDATA_DIR "images/window.png",
-	GAMEDATA_DIR "images/tab.png",
-	GAMEDATA_DIR "images/inputbox.png",
+	"images/window.png",
+	"images/tab.png",
+	"images/inputbox.png",
 	
-	GAMEDATA_DIR "images/chat.png",
+	"images/chat.png",
 	
-	GAMEDATA_DIR "images/error.png",
-	GAMEDATA_DIR "images/boton-error-up.png",
-	GAMEDATA_DIR "images/boton-error-over.png",
-	GAMEDATA_DIR "images/boton-error-down.png",
+	"images/error.png",
+	"images/boton-error-up.png",
+	"images/boton-error-over.png",
+	"images/boton-error-down.png",
 	
-	GAMEDATA_DIR "images/boton-normal-up.png",
-	GAMEDATA_DIR "images/boton-normal-over.png",
-	GAMEDATA_DIR "images/boton-normal-down.png",
+	"images/boton-normal-up.png",
+	"images/boton-normal-over.png",
+	"images/boton-normal-down.png",
 	
-	GAMEDATA_DIR "images/fuzz.png"
+	"images/fuzz.png"
 };
 
 const char *sound_names[NUM_SOUNDS] = {
-	GAMEDATA_DIR "sounds/drop.wav",
-	GAMEDATA_DIR "sounds/win.wav"
+	"sounds/drop.wav",
+	"sounds/win.wav"
 };
 
 /* Codigos de salida */
@@ -338,6 +335,8 @@ void cancelar_conexion (InputBox *ib, const char *texto) {
 
 int main (int argc, char *argv[]) {
 	int r;
+	
+	initSystemPaths (argv[0]);
 	
 	memset (nick_global, 0, sizeof (nick_global));
 	
@@ -736,6 +735,7 @@ void setup (void) {
 	TTF_Font *font;
 	SDL_Color blanco;
 	int g;
+	char buffer_file[8192];
 	
 	/* Inicializar el Video SDL */
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -746,7 +746,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	image = IMG_Load (GAMEDATA_DIR "images/icon.png");
+	sprintf (buffer_file, "%simages/icon.png", systemdata_path);
+	image = IMG_Load (buffer_file);
 	if (image) {
 		SDL_WM_SetIcon (image, NULL);
 		SDL_FreeSurface (image);
@@ -784,14 +785,15 @@ void setup (void) {
 	}
 	
 	for (g = 0; g < NUM_IMAGES; g++) {
-		image = IMG_Load (images_names[g]);
+		sprintf (buffer_file, "%s%s", systemdata_path, images_names[g]);
+		image = IMG_Load (buffer_file);
 		
 		if (image == NULL) {
 			fprintf (stderr,
 				"Failed to load data file:\n"
 				"%s\n"
 				"The error returned by SDL is:\n"
-				"%s\n", images_names[g], SDL_GetError());
+				"%s\n", buffer_file, SDL_GetError());
 			SDL_Quit ();
 			exit (1);
 		}
@@ -802,14 +804,15 @@ void setup (void) {
 	
 	if (use_sound) {
 		for (g = 0; g < NUM_SOUNDS; g++) {
-			sounds[g] = Mix_LoadWAV (sound_names[g]);
+			sprintf (buffer_file, "%s%s", systemdata_path, sound_names[g]);
+			sounds[g] = Mix_LoadWAV (buffer_file);
 			
 			if (sounds[g] == NULL) {
 				fprintf (stderr,
 					"Failed to load data file:\n"
 					"%s\n"
 					"The error returned by SDL is:\n"
-					"%s\n", sound_names[g], SDL_GetError ());
+					"%s\n", buffer_file, SDL_GetError ());
 				SDL_Quit ();
 				exit (1);
 			}
@@ -826,7 +829,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	ttf16_burbank_medium = TTF_OpenFont (GAMEDATA_DIR "burbankbm.ttf", 16);
+	sprintf (buffer_file, "%s%s", systemdata_path, "burbankbm.ttf");
+	ttf16_burbank_medium = TTF_OpenFont (buffer_file, 16);
 	
 	if (!ttf16_burbank_medium) {
 		fprintf (stderr,
@@ -837,7 +841,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	ttf14_facefront = TTF_OpenFont (GAMEDATA_DIR "ccfacefront.ttf", 14);
+	sprintf (buffer_file, "%s%s", systemdata_path, "ccfacefront.ttf");
+	ttf14_facefront = TTF_OpenFont (buffer_file, 14);
 	if (!ttf14_facefront) {
 		fprintf (stderr,
 			"Failed to load font file 'CC Face Front'\n"
@@ -847,7 +852,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	ttf16_comiccrazy = TTF_OpenFont (GAMEDATA_DIR "comicrazy.ttf", 16);
+	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
+	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
 	if (!ttf16_comiccrazy) {
 		fprintf (stderr,
 			"Failed to load font file 'Comic Crazy'\n"
@@ -857,7 +863,8 @@ void setup (void) {
 		exit (1);
 	}
 	
-	font = TTF_OpenFont (GAMEDATA_DIR "burbankbm.ttf", 12);
+	sprintf (buffer_file, "%s%s", systemdata_path, "burbankbm.ttf");
+	font = TTF_OpenFont (buffer_file, 12);
 	if (!font) {
 		fprintf (stderr,
 			"Failed to load font file 'Burbank Medium Bold'\n"
