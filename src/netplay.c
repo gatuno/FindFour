@@ -59,7 +59,7 @@
 #define MULTICAST_IPV6_GROUP "FF02::224:0:0:133"
 
 /* Nuestro socket de red */
-static int fd_socket;
+static int fd_socket6, fd_socket4;
 
 /* El sockaddr para la dirección IPv4 y IPv6 multicast */
 struct sockaddr_in mcast_addr;
@@ -215,42 +215,52 @@ void findfour_netclose (void) {
 }
 #else
 
-int findfour_netinit (int puerto) {
-	struct sockaddr_storage bind_addr;
-	struct sockaddr_in6 *ipv6;
+int findfour_try_netinit4 (int puerto) {
+	struct addrinfo hints, *resultados, *ressave;
 	struct ip_mreq mcast_req;
-	struct ipv6_mreq mcast_req6;
+	char buff_p[10];
 	unsigned char g;
-	unsigned int h;
+	int fd;
 	
-	/* Crear, iniciar el socket */
-	fd_socket = socket (AF_INET6, SOCK_DGRAM, 0);
+	fd = socket (AF_INET, SOCK_DGRAM, 0);
 	
-	if (fd_socket < 0) {
-		/* Mostrar la ventana de error */
+	if (fd < 0) {
+		perror ("Socket AF_INET");
 		return -1;
 	}
 	
-	memset (&bind_addr, 0, sizeof (bind_addr));
-	ipv6 = (struct sockaddr_in6 *) &bind_addr;
+	/* Intentar hacer el bind, pero por medio de getaddrinfo */
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_INET;
 	
-	ipv6->sin6_family = AF_INET6;
-	ipv6->sin6_port = htons (puerto);
-	ipv6->sin6_flowinfo = 0;
-	memcpy (&ipv6->sin6_addr, &in6addr_any, sizeof (in6addr_any));
+	sprintf (buff_p, "%i", puerto);
 	
-	/* Asociar el socket con el puerto */
-	if (bind (fd_socket, (struct sockaddr *) &bind_addr, sizeof (bind_addr)) < 0) {
-		/* Mostrar ventana de error */
-		
+	if (getaddrinfo (NULL, buff_p, &hints, &resultados) < 0) {
+		perror ("Getaddrinfo IPv4");
+		close (fd);
+		return -1;
+	}
+	
+	ressave = resultados;
+	/* Recorrer los resultados hasta que uno haga bind */
+	while (resultados != NULL) {
+		if (bind (fd, resultados->ai_addr, resultados->ai_addrlen) >= 0) {
+			/* Por fin un bind */
+			break;
+		}
+		resultados = resultados->ai_next;
+	}
+	
+	freeaddrinfo (ressave);
+	if (resultados == NULL) {
+		fprintf (stderr, "Ningún bind hizo efecto\n");
+		close (fd);
 		return -1;
 	}
 	
 	/* No utilizaré poll, sino llamadas no-bloqueantes */
-	fcntl (fd_socket, F_SETFL, O_NONBLOCK);
-	
-	/* Intentar el binding request */
-	try_stun_binding ("stun.ekiga.net", fd_socket);
+	fcntl (fd, F_SETFL, O_NONBLOCK);
 	
 	/* Hacer join a los grupos multicast */
 	/* Primero join al IPv4 */
@@ -262,14 +272,70 @@ int findfour_netinit (int puerto) {
 	mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
 	mcast_req.imr_interface.s_addr = INADDR_ANY;
 	
-	if (setsockopt (fd_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
+	if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
 		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
 	}
 	
 	g = 0;
-	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
+	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
 	g = 1;
-	setsockopt (fd_socket, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
+	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
+	
+	/* Intentar el binding request */
+	try_stun_binding ("stun.ekiga.net", fd);
+	
+	return fd;
+}
+
+int findfour_try_netinit6 (int puerto) {
+	struct addrinfo hints, *resultados, *ressave;
+	struct ipv6_mreq mcast_req6;
+	unsigned int h;
+	char buff_p[10];
+	int fd;
+	
+	fd = socket (AF_INET6, SOCK_DGRAM, 0);
+	
+	if (fd < 0) {
+		perror ("Socket AF_INET6");
+		return -1;
+	}
+	
+	h = 1;
+	setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&h, sizeof(h));
+	
+	/* Intentar hacer el bind, pero por medio de getaddrinfo */
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_INET6;
+	
+	sprintf (buff_p, "%i", puerto);
+	
+	if (getaddrinfo (NULL, buff_p, &hints, &resultados) < 0) {
+		perror ("Getaddrinfo IPv6");
+		close (fd);
+		return -1;
+	}
+	
+	ressave = resultados;
+	/* Recorrer los resultados hasta que uno haga bind */
+	while (resultados != NULL) {
+		if (bind (fd, resultados->ai_addr, resultados->ai_addrlen) >= 0) {
+			/* Por fin un bind */
+			break;
+		}
+		resultados = resultados->ai_next;
+	}
+	
+	freeaddrinfo (ressave);
+	if (resultados == NULL) {
+		fprintf (stderr, "Ningún bind hizo efecto v6\n");
+		close (fd);
+		return -1;
+	}
+	
+	/* No utilizaré poll, sino llamadas no-bloqueantes */
+	fcntl (fd, F_SETFL, O_NONBLOCK);
 	
 	/* Intentar el join al grupo IPv6 */
 	mcast_addr6.sin6_family = AF_INET6;
@@ -281,14 +347,31 @@ int findfour_netinit (int puerto) {
 	memcpy (&mcast_req6.ipv6mr_multiaddr, &(mcast_addr6.sin6_addr), sizeof (struct in6_addr));
 	mcast_req6.ipv6mr_interface = 0;
 	
-	if (setsockopt (fd_socket, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
+	if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
 		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
 	}
 	
 	h = 0;
-	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &h, sizeof (h));
+	setsockopt (fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &h, sizeof (h));
 	h = 64;
-	setsockopt (fd_socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
+	setsockopt (fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &h, sizeof (h));
+	
+	return fd;
+}
+
+int findfour_netinit (int puerto) {
+	/* Crear, iniciar el socket de IPv4 */
+	fd_socket4 = findfour_try_netinit4 (puerto);
+	
+	fd_socket6 = findfour_try_netinit6 (puerto);
+	
+	if (fd_socket4 < 0 && fd_socket6 < 0) {
+		/* Mostrar la ventana de error */
+		/* Cerrar el socket que se haya podido abrir */
+		if (fd_socket4 >= 0) close (fd_socket4);
+		if (fd_socket6 >= 0) close (fd_socket6);
+		return -1;
+	}
 	
 	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
@@ -301,8 +384,9 @@ void findfour_netclose (void) {
 	/* Enviar el multicast de retiro de partida */
 	enviar_end_broadcast_game ();
 	
-	/* Y cerrar el socket */
-	close (fd_socket);
+	/* Cerrar los sockets */
+	if (fd_socket4 >= 0) close (fd_socket4);
+	if (fd_socket6 >= 0) close (fd_socket6);
 }
 #endif
 
@@ -373,7 +457,7 @@ void conectar_juego (Juego *juego, const char *nick) {
 	
 	buffer_send[8 + NICK_SIZE] = (juego->inicio == 1 ? 255 : 0);
 	
-	sendto (fd_socket, buffer_send, 9 + NICK_SIZE, 0, (struct sockaddr *) &juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 9 + NICK_SIZE, 0, (struct sockaddr *) &juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié un SYN inicial. Mi local port: %i\n", juego->local);
@@ -402,7 +486,7 @@ void enviar_res_syn (Juego *juego, const char *nick) {
 	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
 	buffer_send[7 + NICK_SIZE] = '\0';
 	
-	sendto (fd_socket, buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envie un RES_SYN. Estoy listo para jugar. Mi local prot: %i\n", juego->local);
@@ -432,7 +516,7 @@ void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 	buffer_send[9] = col;
 	buffer_send[10] = fila;
 	
-	sendto (fd_socket, buffer_send, 11, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 11, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié un movimiento.\n");
@@ -460,7 +544,7 @@ void enviar_mov_ack (Juego *juego) {
 	
 	buffer_send[8] = juego->turno;
 	
-	sendto (fd_socket, buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié una confirmación de movimiento.\n");
@@ -488,7 +572,7 @@ void enviar_mov_ack_finish (Juego *juego, int reason) {
 	
 	buffer_send[9] = reason;
 	
-	sendto (fd_socket, buffer_send, 10, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 10, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié una confirmación de movimiento con ganador.\n");
@@ -514,7 +598,7 @@ void enviar_fin (Juego *juego) {
 	
 	buffer_send[8] = juego->last_fin;
 	
-	sendto (fd_socket, buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié un petición de FIN.\n");
@@ -539,7 +623,7 @@ void enviar_fin_ack (Juego *juego) {
 	temp = htons (juego->remote);
 	memcpy (&buffer_send[6], &temp, sizeof (temp));
 	
-	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié una confirmación de FIN.\n");
@@ -565,7 +649,7 @@ void enviar_keep_alive (Juego *juego) {
 	temp = htons (juego->remote);
 	memcpy (&buffer_send[6], &temp, sizeof (temp));
 	
-	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Envié keep alive para ver si sigue vivo.\n");
@@ -590,7 +674,7 @@ void enviar_keep_alive_ack (Juego *juego) {
 	temp = htons (juego->remote);
 	memcpy (&buffer_send[6], &temp, sizeof (temp));
 	
-	sendto (fd_socket, buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	printf ("Respondí con un Keep Alive ACK\n");
@@ -785,7 +869,7 @@ void check_for_retry (void) {
 				printf ("Reenviando FIN por timer\n");
 				enviar_fin (ventana);
 				ventana->retry++;
-			} else if (ventana->estado == NET_READY) {
+			} else if (ventana->estado == NET_READY && ventana->turno % 2 != ventana->inicio) {
 				printf ("Enviando Keep Alive\n");
 				enviar_keep_alive (ventana);
 				ventana->retry++;
@@ -802,6 +886,25 @@ void check_for_retry (void) {
 	}
 }
 
+int do_read (void *buffer, size_t buffer_len, struct sockaddr *src_addr, socklen_t *addrlen) {
+	int len;
+	if (fd_socket4 >= 0) {
+		/* Intentar una lectura del socket de IPv4 */
+		len = recvfrom (fd_socket4, buffer, buffer_len, 0, src_addr, addrlen);
+		
+		if (len >= 0) return len;
+	}
+	
+	if (fd_socket6 >= 0) {
+		/* Intentar una lectura del socket de IPv6 */
+		len = recvfrom (fd_socket6, buffer, buffer_len, 0, src_addr, addrlen);
+		
+		if (len >= 0) return len;
+	}
+	
+	return -1;
+}
+
 void process_netevent (void) {
 	char buffer [256];
 	Juego *ventana, *next;
@@ -813,8 +916,9 @@ void process_netevent (void) {
 	
 	do {
 		peer_socklen = sizeof (peer);
+		
 		/* Intentar hacer otra lectura para procesamiento */
-		len = recvfrom (fd_socket, buffer, sizeof (buffer), 0, (struct sockaddr *) &peer, &peer_socklen);
+		len = do_read (buffer, sizeof (buffer), (struct sockaddr *) &peer, &peer_socklen);
 		
 		if (len < 0) break;
 		
@@ -966,8 +1070,8 @@ void enviar_broadcast_game (char *nick) {
 	buffer[4 + NICK_SIZE - 1] = '\0';
 	
 	/* Enviar a IPv4 y IPv6 */
-	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	sendto (fd_socket, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+	sendto (fd_socket4, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	sendto (fd_socket6, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
 }
 
 void enviar_end_broadcast_game (void) {
@@ -979,7 +1083,7 @@ void enviar_end_broadcast_game (void) {
 	buffer[3] = TYPE_MCAST_FIN;
 	
 	/* Enviar a IPv4 y IPv6 */
-	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
-	sendto (fd_socket, buffer, 4, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
+	sendto (fd_socket4, buffer, 4, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
+	sendto (fd_socket6, buffer, 4, 0, (struct sockaddr *) &mcast_addr6, sizeof (mcast_addr6));
 }
 
