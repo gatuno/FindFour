@@ -35,6 +35,10 @@
 
 #include "findfour.h"
 
+typedef struct {
+	int fila, col, frame, color;
+} Anim;
+
 /* Estructuras */
 typedef struct _Juego {
 	Ventana ventana;
@@ -66,6 +70,10 @@ typedef struct _Juego {
 	Uint32 last_response;
 	uint16_t local, remote;
 	int last_fila, last_col, last_fin;
+	
+	/* Para animación */
+	int num_a;
+	Anim animaciones[4];
 } Juego;
 
 /* Funciones públicas */

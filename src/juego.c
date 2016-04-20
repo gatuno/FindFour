@@ -42,6 +42,8 @@
 #include "draw-text.h"
 #include "message.h"
 
+#define ANIM_VEL 2
+
 int juego_mouse_down (Juego *j, int x, int y, int **button_map);
 int juego_mouse_motion (Juego *j, int x, int y, int **button_map);
 int juego_mouse_up (Juego *j, int x, int y, int **button_map);
@@ -98,6 +100,9 @@ Juego *crear_juego (int top_window) {
 	j->local = j->remote = 0;
 	j->retry = 0;
 	j->estado = NET_CLOSED;
+	
+	/* Para la animación */
+	j->num_a = 0;
 	
 	/* Vaciar el tablero */
 	memset (j->tablero, 0, sizeof (int[6][7]));
@@ -243,7 +248,7 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	
 	if (j->ventana.mostrar == FALSE) return FALSE;
 	
-	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY) {
+	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY && j->num_a == 0) {
 		/* Está dentro del tablero */
 		h = -1;
 		if (x >= 32 && x < 56 && j->tablero[0][0] == 0) {
@@ -267,8 +272,9 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			g = 5;
 			while (g > 0 && j->tablero[g][h] != 0) g--;
 			
-			/* Poner la ficha en la posición [g][h] y avanzar turno */
 			j->tablero[g][h] = (j->turno % 2) + 1;
+			
+			if (use_sound) Mix_PlayChannel (-1, sounds[SND_DROP], 0);
 			
 			/* Enviar el turno */
 			j->retry = 0;
@@ -283,13 +289,22 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			
 			if (j->win != 0 || j->turno == 42) {
 				j->estado = NET_WAIT_WINNER;
-				if (j->win != 0) {
-					/* Somos ganadores */
+				/*if (j->win != 0) {
+					// Somos ganadores
 					message_add (MSG_NORMAL, "Has ganado la partida");
 				} else {
 					message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
-				}
+				}*/
 			}
+			
+			/* Borrar la ficha del tablero y meterla a la cola de animación */
+			j->animaciones[j->num_a].fila = g;
+			j->animaciones[j->num_a].col = h;
+			j->animaciones[j->num_a].frame = 0;
+			j->animaciones[j->num_a].color = j->tablero[g][h];
+			j->num_a++;
+			
+			j->tablero[g][h] = 0;
 		}
 	}
 	
@@ -411,6 +426,10 @@ void buscar_ganador (Juego *j) {
 
 void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 	int g;
+	/* Antes de recibir un movimiento, poner temporalmente en el tablero las fichas que se están animando */
+	for (g = 0; g < j->num_a; g++) {
+		j->tablero[j->animaciones[g].fila][j->animaciones[g].col] = j->animaciones[g].color;
+	}
 	if (j->turno != turno) {
 		/* TODO: Si el turno es 1 menor, es una repetición */
 		if (turno == j->turno - 1) {
@@ -458,16 +477,32 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 			/* Buscar un ganador, si lo hay, enviar el ACK_GAME */
 			if (j->win != 0) {
 				enviar_mov_ack_finish (j, GAME_FINISH_LOST);
-				message_add (MSG_NORMAL, "%s ha ganado la partida", j->nick_remoto);
+				//message_add (MSG_NORMAL, "%s ha ganado la partida", j->nick_remoto);
 				j->estado = NET_CLOSED;
 			} else if (j->turno == 42) {
 				enviar_mov_ack_finish (j, GAME_FINISH_TIE);
-				message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
+				//message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
 				j->estado = NET_CLOSED;
 			} else {
 				enviar_mov_ack (j);
 			}
+			
+			/* Quitar la ficha recién recibida por red,
+			 * y meterla a la cola de animación */
+			 /* Borrar la ficha del tablero y meterla a la cola de animación */
+			j->animaciones[j->num_a].fila = g;
+			j->animaciones[j->num_a].col = col;
+			j->animaciones[j->num_a].frame = 0;
+			j->animaciones[j->num_a].color = j->tablero[g][col];
+			j->num_a++;
+			
+			j->tablero[g][col] = 0;
 		}
+	}
+	
+	/* Quitar las fichas que se están animando */
+	for (g = 0; g < j->num_a; g++) {
+		j->tablero[j->animaciones[g].fila][j->animaciones[g].col] = 0;
 	}
 }
 
@@ -505,6 +540,34 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 			} else {
 				SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
 			}
+		}
+	}
+	
+	/* Dibujar la ficha en plena animación */
+	if (j->num_a > 0) {
+		rect.x = j->ventana.x + tablero_cols[j->animaciones[0].col];
+		g = j->animaciones[0].frame / ANIM_VEL;
+		rect.y = j->ventana.y + tablero_filas[g];
+		rect.w = images[IMG_COINBLUE]->w;
+		rect.h = images[IMG_COINBLUE]->h;
+		
+		if (j->animaciones[0].color == 1) {
+			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+		}
+		
+		j->animaciones[0].frame++;
+		g = j->animaciones[0].frame / ANIM_VEL;
+		if (g == j->animaciones[0].fila) {
+			/* Finalizar esta animación */
+			j->tablero[j->animaciones[0].fila][j->animaciones[0].col] = j->animaciones[0].color;
+			
+			/* Recorrer las otras animaciones */
+			for (h = 1; h < j->num_a; h++) {
+				j->animaciones[h - 1] = j->animaciones[h];
+			}
+			j->num_a--;
 		}
 	}
 	
@@ -627,7 +690,7 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		}
 	}
 	
-	if (j->win != 0) {
+	if (j->win != 0 && j->num_a == 0) {
 		switch (j->win_dir) {
 			case 1:
 				rect.w = images[IMG_WIN_1]->w;
