@@ -254,7 +254,7 @@ void try_stun_binding (const char *server, int fd_socket) {
 	h = gethostbyname (host);
 	
 	if (h == NULL) {
-		perror ("Falló la conversión de nombres");
+		perror ("Falló la conversión de nombres. STUN.");
 		return;
 	}
 	
