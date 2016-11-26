@@ -28,7 +28,7 @@
 #include "message.h"
 #include "draw-text.h"
 
-typedef struct _Message {
+struct _Message {
 	char msg[1024];
 	int tipo;
 	struct _Message *next;

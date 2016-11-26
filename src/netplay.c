@@ -1080,7 +1080,7 @@ void process_netevent (void) {
 				/* Keep alive en cualquier momento se responde con Keep Alive ACK */
 				enviar_keep_alive_ack (ventana);
 			} else if ((message.type == TYPE_RES_SYN && ventana->estado != NET_SYN_SENT) ||
-			    (message.type == TYPE_TRN && ventana->estado != NET_READY) ||
+			    (message.type == TYPE_TRN && (ventana->estado != NET_READY && ventana->estado != NET_WAIT_ACK)) ||
 			    (message.type == TYPE_TRN_ACK && ventana->estado != NET_WAIT_ACK) ||
 			    (message.type == TYPE_TRN_ACK_GAME && ventana->estado != NET_WAIT_WINNER) ||
 			    (message.type == TYPE_FIN_ACK && ventana->estado != NET_WAIT_CLOSING) ||
@@ -1096,6 +1096,13 @@ void process_netevent (void) {
 				//printf ("Recibí RES SYN. Su puerto remoto es: %i\n", ventana->remote);
 				ventana->estado = NET_READY;
 			} else if (message.type == TYPE_TRN) {
+				/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
+				 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
+				if (ventana->estado == NET_WAIT_ACK && message.turno == ventana->turno) {
+					//printf ("Movimiento de turno cuando esperaba confirmación\n");
+					ventana->estado = NET_READY;
+				}
+				
 				/* Recibir el movimiento */
 				recibir_movimiento (ventana, message.turno, message.col, message.fila);
 			} else if (message.type == TYPE_TRN_ACK) {

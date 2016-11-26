@@ -351,10 +351,6 @@ int main (int argc, char *argv[]) {
 	
 	server_port = 3300;
 	
-	if (argc > 1) {
-		server_port = atoi (argv[1]);
-	}
-	
 	cp_button_start ();
 	do {
 		if (game_loop () == GAME_QUIT) break;
