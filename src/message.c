@@ -35,11 +35,12 @@ struct _Message {
 	int button_frame;
 	int x, y, w, h;
 	SDL_Surface *text_image;
+	SDL_Surface *button_text_image;
 };
 
 Message *list_msg = NULL;
 
-void message_add (int tipo, const char *cadena, ...) {
+void message_add (int tipo, const char *texto_boton, const char *cadena, ...) {
 	Message *new, *end;
 	va_list ap;
 	SDL_Color blanco;
@@ -50,7 +51,7 @@ void message_add (int tipo, const char *cadena, ...) {
 	if (new == NULL) return;
 	
 	va_start (ap, cadena);
-	vsprintf (new->msg, cadena, ap);
+	vsnprintf (new->msg, sizeof (new->msg), cadena, ap);
 	new->tipo = tipo;
 	new->button_frame = 0;
 	new->next = NULL;
@@ -80,6 +81,12 @@ void message_add (int tipo, const char *cadena, ...) {
 	}
 	
 	va_end (ap);
+	
+	if (texto_boton != NULL && texto_boton[0] != 0) {
+		new->button_text_image = draw_text (ttf20_comiccrazy, texto_boton, &blanco);
+	} else {
+		new->button_text_image = NULL;
+	}
 	
 	full_stop_drag();
 }
@@ -230,6 +237,16 @@ void message_display (SDL_Surface *screen) {
 	rect.y = list_msg->y + 30;
 	
 	SDL_BlitSurface (list_msg->text_image, NULL, screen, &rect);
+	
+	if (list_msg->button_text_image != NULL) {
+		/* Dibujar el texto del botón */
+		rect.w = list_msg->button_text_image->w;
+		rect.h = list_msg->button_text_image->h;
+		rect.x = list_msg->x + (list_msg->w - rect.w) / 2;
+		rect.y = list_msg->y + list_msg->h - 58;
+	
+		SDL_BlitSurface (list_msg->button_text_image, NULL, screen, &rect);
+	}
 }
 
 int message_mouse_down (int m_x, int m_y, int **button_map) {
@@ -283,6 +300,7 @@ int message_mouse_up (int m_x, int m_y, int **button_map) {
 			/* Eliminar este mensaje */
 			next = list_msg->next;
 			SDL_FreeSurface (list_msg->text_image);
+			SDL_FreeSurface (list_msg->button_text_image);
 			free (list_msg);
 			list_msg = next;
 		}

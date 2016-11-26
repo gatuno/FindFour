@@ -90,6 +90,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, 
 		set_first_window ((Ventana *) ib);
 	}
 	
+	ib->cursor_vel = 0;
 	return ib;
 }
 
@@ -214,7 +215,8 @@ int inputbox_mouse_up (InputBox *ib, int x, int y, int **button_map) {
 void inputbox_draw (InputBox *ib, SDL_Surface *screen) {
 	SDL_Rect rect, rect2, rect3;
 	int p, q, g;
-	Uint32 azul;
+	Uint32 color;
+	int cursor;
 	
 	p = (ib->ventana.w - 144) / 16;
 	q = (ib->ventana.h - 52) / 8;
@@ -334,14 +336,14 @@ void inputbox_draw (InputBox *ib, SDL_Surface *screen) {
 	SDL_BlitSurface (images[IMG_WINDOW_TAB], NULL, screen, &rect);
 	
 	/* Rellenar todo el centro de color sólido */
-	azul = SDL_MapRGB (screen->format, 0x02, 0x80, 0xcd);
+	color = SDL_MapRGB (screen->format, 0x02, 0x80, 0xcd);
 	
 	rect.x = ib->ventana.x + 20;
 	rect.w = ib->ventana.w - 40;
 	rect.y = ib->ventana.y + 34;
 	rect.h = ib->ventana.h - 52;
 	
-	SDL_FillRect (screen, &rect, azul);
+	SDL_FillRect (screen, &rect, color);
 	
 	/* Ahora dibujar el inputbox */
 	p = (ib->ventana.w - 68) / 10;
@@ -394,6 +396,7 @@ void inputbox_draw (InputBox *ib, SDL_Surface *screen) {
 	
 	SDL_BlitSurface (ib->text_ask, NULL, screen, &rect);
 	
+	cursor = 0;
 	/* Dibujar la cadena de texto */
 	if (ib->text_s != NULL) {
 		rect.x = ib->ventana.x + 36;
@@ -412,6 +415,27 @@ void inputbox_draw (InputBox *ib, SDL_Surface *screen) {
 		}
 		rect.w = rect2.w;
 		SDL_BlitSurface (ib->text_s, &rect2, screen, &rect);
+		
+		cursor += rect.w;
+	}
+	
+	if (get_first_window () == (Ventana *)ib) {
+		/* Dibujar el cursor si soy la primera ventana */
+		if (ib->cursor_vel < INPUTBOX_CURSOR_RATE) {
+			rect.x = ib->ventana.x + 37 + cursor;
+			rect.y = ib->ventana.y + ib->box_y + 5;
+			rect.w = 1;
+			rect.h = 19;
+
+			color = SDL_MapRGB (screen->format, 0xFF, 0xFF, 0xFF);
+
+			SDL_FillRect (screen, &rect, color);
+		}
+		
+		ib->cursor_vel++;
+		if (ib->cursor_vel >= 24) ib->cursor_vel = 0;
+	} else {
+		ib->cursor_vel = 0;
 	}
 	
 	/* Dibujar el botón de cierre */
@@ -468,6 +492,9 @@ int inputbox_key_down (InputBox *ib, SDL_KeyboardEvent *key) {
 	} else {
 		ib->text_s = NULL;
 	}
+	
+	/* Reiniciar el parpadeo */
+	ib->cursor_vel = 0;
 	//printf ("Ejecuto keydown, unicode: %hi. Cadena: \"%s\", len: %i\n", key->keysym.unicode, ib->buffer, strlen(ib->buffer));
 	return TRUE;
 }

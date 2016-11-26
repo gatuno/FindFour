@@ -220,7 +220,7 @@ void parse_stun_message (const char *buffer, int buffer_len) {
 #else
 		inet_ntop (AF_INET, &sin_addr, ip_addr, sizeof (ip_addr));
 #endif
-		message_add (MSG_NORMAL, "¡Felicidades!\nSe ha detectado que puedes jugar en linea\nTu dirección IP es: %s\n", ip_addr);
+		message_add (MSG_NORMAL, "Ok", "¡Felicidades!\nSe ha detectado que puedes jugar en linea\nTu dirección IP es: %s\n", ip_addr);
 	}
 }
 

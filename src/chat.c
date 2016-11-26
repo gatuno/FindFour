@@ -58,7 +58,8 @@ void inicializar_chat (void) {
 	
 	c->ventana.w = 232; /* FIXME: Arreglar esto */
 	c->ventana.h = 324;
-	c->ventana.x = c->ventana.y = 0;
+	c->ventana.x = 528;
+	c->ventana.y = 78;
 	
 	c->ventana.tipo = WINDOW_CHAT;
 	c->ventana.mostrar = TRUE;

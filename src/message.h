@@ -34,7 +34,7 @@ typedef struct _Message Message;
 
 extern Message *list_msg;
 
-void message_add (int tipo, const char *cadena, ...);
+void message_add (int tipo, const char *texto_boton, const char *cadena, ...);
 void message_display (SDL_Surface *screen);
 
 int message_mouse_down (int, int, int **);

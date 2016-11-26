@@ -170,7 +170,7 @@ int server_port;
 char nick_global[NICK_SIZE];
 static int nick_default;
 
-TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy;
+TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
 
 Ventana *get_first_window (void) {
 	return primero;
@@ -851,6 +851,17 @@ void setup (void) {
 	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
 	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
 	if (!ttf16_comiccrazy) {
+		fprintf (stderr,
+			"Failed to load font file 'Comic Crazy'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
+	ttf20_comiccrazy = TTF_OpenFont (buffer_file, 20);
+	if (!ttf20_comiccrazy) {
 		fprintf (stderr,
 			"Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"

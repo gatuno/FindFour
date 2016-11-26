@@ -23,6 +23,8 @@
 
 #include "findfour.h"
 
+#define INPUTBOX_CURSOR_RATE 12
+
 typedef struct _InputBox InputBox;
 
 typedef void (*InputBoxFunc) (InputBox *v, const char *texto);
@@ -42,6 +44,8 @@ struct _InputBox {
 	InputBoxFunc close_callback;
 	SDL_Surface *text_s;
 	SDL_Surface *text_ask;
+	
+	int cursor_vel;
 };
 
 InputBox *crear_inputbox (InputBoxFunc, const char *, const char *, InputBoxFunc);

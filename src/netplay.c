@@ -1068,9 +1068,9 @@ void process_netevent (void) {
 			
 			if (message.type == TYPE_FIN) {
 				if (message.fin == NET_USER_QUIT && ventana->nick_remoto[0] != 0) {
-					message_add (MSG_NORMAL, "%s ha cerrado la partida", ventana->nick_remoto);
+					message_add (MSG_NORMAL, "Ok", "%s ha cerrado la partida", ventana->nick_remoto);
 				} else {
-					message_add (MSG_ERROR, "La partida se ha cerrado\nErr: %i", message.fin);
+					message_add (MSG_ERROR, "Ok", "La partida se ha cerrado\nErr: %i", message.fin);
 				}
 				enviar_fin_ack (ventana);
 				
