@@ -39,10 +39,6 @@
 
 /* Enumerar las imágenes */
 enum {
-	IMG_LODGE,
-	IMG_LODGE_FIRE,
-	IMG_LODGE_CANDLE,
-	
 	IMG_WINDOW,
 	
 	IMG_BOARD,
