@@ -1,3 +1,15 @@
+/*
+ * utf8.h
+ * This file is part of Find Four
+ *
+ * Basic UTF-8 manipulation routines
+ * by Jeff Bezanson
+ * placed in the public domain Fall 2005
+ */
+
+#ifndef __UTF8_H__
+#define __UTF8_H__
+
 #include <stdarg.h>
 #include <stdint.h>
 
@@ -70,3 +82,8 @@ int u8_is_locale_utf8(char *locale);
    locale is UTF-8. */
 int u8_vprintf(char *fmt, va_list ap);
 int u8_printf(char *fmt, ...);
+
+int is_utf8 (const char * string);
+
+#endif /* __UTF8_H__ */
+

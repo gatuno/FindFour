@@ -326,7 +326,10 @@ int findfour_try_netinit4 (int puerto) {
 	}
 	
 	/* No utilizaré poll, sino llamadas no-bloqueantes */
-	fcntl (fd, F_SETFL, O_NONBLOCK);
+	int flags;
+	flags = fcntl (fd, F_GETFL, 0);
+	flags = flags | O_NONBLOCK;
+	fcntl (fd, F_SETFL, flags);
 	
 	/* Hacer join a los grupos multicast */
 	/* Primero join al IPv4 */
@@ -778,9 +781,15 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Copiar el nick */
 		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
 		
 		/* Copiar quién empieza */
 		msg->initial = buffer[8 + NICK_SIZE];
+		
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+		}
 	} else if (msg->type == TYPE_RES_SYN) {
 		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
 		/* Copiar el puerto local */
@@ -793,9 +802,14 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Copiar el nick */
 		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
 		
 		/* Copiar quién empieza */
 		msg->initial = buffer[8 + NICK_SIZE];
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+		}
 	} else if (msg->type == TYPE_TRN) {
 		if (len < 11) return -1;
 		
@@ -862,6 +876,12 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Copiar el nick */
 		strncpy (msg->nick, &buffer[4], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
+		
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+		}
 	} else if (msg->type == TYPE_MCAST_FIN) {
 		/* Ningún dato extra */
 	} else if (msg->type == TYPE_KEEP_ALIVE) {

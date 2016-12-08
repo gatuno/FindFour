@@ -169,6 +169,7 @@ static int nick_default;
 
 TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
 
+/* Funciones para el manejo de ventanas */
 Ventana *get_first_window (void) {
 	return primero;
 }
@@ -185,6 +186,7 @@ void set_last_window (Ventana *v) {
 	ultimo = v;
 }
 
+/* Analizador de urls básico */
 int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto) {
 	char *p, *port, *invalid;
 	int g;
@@ -369,8 +371,6 @@ int game_loop (void) {
 	int start = 0;
 	int x, y;
 	int manejado;
-	int background_fire;
-	int lodge_candle;
 	
 	primero = NULL;
 	ultimo = NULL;
@@ -394,8 +394,6 @@ int game_loop (void) {
 	}
 	
 	SDL_EnableUNICODE (1);
-	background_fire = 0;
-	lodge_candle = 0;
 	
 	do {
 		last_time = SDL_GetTicks ();
@@ -610,7 +608,7 @@ int game_loop (void) {
 		if (ventana->tipo != WINDOW_GAME) continue;
 		
 		j = (Juego *) ventana;
-		if (j->estado != NET_CLOSED) {
+		if (j->estado != NET_CLOSED && j->estado != NET_WAIT_CLOSING) {
 			j->last_fin = NET_USER_QUIT;
 			j->retry = 0;
 			enviar_fin (j);
