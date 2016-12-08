@@ -490,7 +490,6 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 			
 			/* Quitar la ficha recién recibida por red,
 			 * y meterla a la cola de animación */
-			 /* Borrar la ficha del tablero y meterla a la cola de animación */
 			j->animaciones[j->num_a].fila = g;
 			j->animaciones[j->num_a].col = col;
 			j->animaciones[j->num_a].frame = 0;
@@ -647,6 +646,13 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		rect.h = j->nick_remoto_image->h;
 		
 		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, screen, &rect);
+	} else {
+		rect.x = j->ventana.x + 74;
+		rect.y = j->ventana.y + 272;
+		rect.w = text_waiting->w;
+		rect.h = text_waiting->h;
+		
+		SDL_BlitSurface (text_waiting, NULL, screen, &rect);
 	}
 	
 	j->timer++;

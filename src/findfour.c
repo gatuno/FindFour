@@ -668,7 +668,6 @@ void drawfuzz (int x, int y, int w, int h) {
 /* Mattias Engdegard <f91-men@nada.kth.se> */
 SDL_Surface * set_video_mode (unsigned flags) {
 	/* Prefer 16bpp, but also prefer native modes to emulated 16bpp. */
-
 	int depth;
 
 	depth = SDL_VideoModeOK (760, 480, 16, flags);
@@ -678,7 +677,7 @@ SDL_Surface * set_video_mode (unsigned flags) {
 void setup (void) {
 	SDL_Surface * image;
 	TTF_Font *font;
-	SDL_Color blanco;
+	SDL_Color blanco, negro;
 	int g;
 	char buffer_file[8192];
 	
@@ -819,21 +818,10 @@ void setup (void) {
 		exit (1);
 	}
 	
-	sprintf (buffer_file, "%s%s", systemdata_path, "burbankbm.ttf");
-	font = TTF_OpenFont (buffer_file, 12);
-	if (!font) {
-		fprintf (stderr,
-			"Failed to load font file 'Burbank Medium Bold'\n"
-			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
-		SDL_Quit ();
-		exit (1);
-	}
-	
-	blanco.r = blanco.g = blanco.b = 255;
-	text_waiting = TTF_RenderUTF8_Blended (font, "Waiting for player", blanco);
-	
-	TTF_CloseFont (font);
+	/* Dibujar el texto de "Esperando jugador" */
+	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
+	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
+	text_waiting = draw_text_with_shadow (ttf16_comiccrazy, 2, "Connecting...", blanco, negro);
 	
 	setup_background ();
 	srand (SDL_GetTicks ());

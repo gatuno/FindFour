@@ -45,6 +45,9 @@ AC_CONFIG_HEADERS([config.h])
 
 AC_CHECK_TOOL(WINDRES, windres)
 
+# Checar si getifaddrs existe
+AC_CHECK_FUNCS(getifaddrs)
+
 # Revisar el host
 AC_CANONICAL_HOST
 

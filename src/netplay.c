@@ -49,6 +49,15 @@
 /* Para SDL_GetTicks */
 #include <SDL.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#if HAVE_GETIFADDRS
+#include <ifaddrs.h>
+#include <net/if.h>
+#endif
+
 #include "findfour.h"
 #include "juego.h"
 #include "netplay.h"
@@ -331,19 +340,47 @@ int findfour_try_netinit4 (int puerto) {
 	flags = flags | O_NONBLOCK;
 	fcntl (fd, F_SETFL, flags);
 	
-	/* Hacer join a los grupos multicast */
-	/* Primero join al IPv4 */
+	inet_pton (AF_INET, MULTICAST_IPV4_GROUP, &mcast_addr.sin_addr.s_addr);
 	memset (&mcast_req, 0, sizeof (mcast_req));
 	mcast_addr.sin_family = AF_INET;
 	mcast_addr.sin_port = htons (puerto);
-
-	inet_pton (AF_INET, MULTICAST_IPV4_GROUP, &mcast_addr.sin_addr.s_addr);
+	/* Hacer join a los grupos multicast */
+#if HAVE_GETIFADDRS
+	/* Listar todas las interfaces para hacer join en todas */
+	struct ifaddrs *ifap, *ifa;
+	struct sockaddr_in *sa;
+	int rc;
+	
+	rc = getifaddrs (&ifap);
+	
+	if (rc == 0) { /* Sin error */
+		for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+			if (ifa->ifa_addr->sa_family == AF_INET &&
+				(ifa->ifa_flags & IFF_LOOPBACK) == 0 && /* No queremos las interfaces Loopback */
+				(ifa->ifa_flags & IFF_MULTICAST)) { /* Y solo las que soportan multicast */
+				sa = (struct sockaddr_in *) ifa->ifa_addr;
+				
+				mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
+				mcast_req.imr_interface.s_addr = sa->sin_addr.s_addr;
+				
+				if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
+					perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
+				}
+			}
+		}
+		freeifaddrs(ifap);
+	} else {
+#endif
+	/* Join a la interfaz 0.0.0.0 */
 	mcast_req.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
 	mcast_req.imr_interface.s_addr = INADDR_ANY;
 	
 	if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
 		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
 	}
+#if HAVE_GETIFADDRS
+	}
+#endif
 	
 	g = 0;
 	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
@@ -407,18 +444,47 @@ int findfour_try_netinit6 (int puerto) {
 	fcntl (fd, F_SETFL, O_NONBLOCK);
 	
 	/* Intentar el join al grupo IPv6 */
+	inet_pton (AF_INET6, MULTICAST_IPV6_GROUP, &mcast_addr6.sin6_addr);
 	mcast_addr6.sin6_family = AF_INET6;
 	mcast_addr6.sin6_port = htons (puerto);
 	mcast_addr6.sin6_flowinfo = 0;
-	mcast_addr6.sin6_scope_id = 0; /* Cualquier interfaz */
+	mcast_addr6.sin6_scope_id = 0;
 	
-	inet_pton (AF_INET6, MULTICAST_IPV6_GROUP, &mcast_addr6.sin6_addr);
+#if HAVE_GETIFADDRS
+	/* Listar todas las interfaces para hacer join en todas */
+	struct ifaddrs *ifap, *ifa;
+	int rc;
+	rc = getifaddrs (&ifap);
+	
+	if (rc == 0) { /* Sin error */
+		for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+			if (ifa->ifa_addr->sa_family == AF_INET6 &&
+				(ifa->ifa_flags & IFF_LOOPBACK) == 0 && /* No queremos las interfaces Loopback */
+				(ifa->ifa_flags & IFF_MULTICAST)) { /* Y solo las que soportan multicast */
+				memset (&mcast_req6, 0, sizeof (mcast_req6));
+				
+				memcpy (&mcast_req6.ipv6mr_multiaddr, &(mcast_addr6.sin6_addr), sizeof (struct in6_addr));
+				mcast_req6.ipv6mr_interface = if_nametoindex (ifa->ifa_name);
+				
+				if (mcast_req6.ipv6mr_interface != 0) {
+					if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
+						perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
+					}
+				}
+			}
+		}
+		freeifaddrs(ifap);
+	} else {
+#endif
 	memcpy (&mcast_req6.ipv6mr_multiaddr, &(mcast_addr6.sin6_addr), sizeof (struct in6_addr));
-	mcast_req6.ipv6mr_interface = 0;
+	mcast_req6.ipv6mr_interface = 0; /* Cualquier interfaz */
 	
 	if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
 		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
 	}
+#if HAVE_GETIFADDRS
+	}
+#endif
 	
 	h = 0;
 	setsockopt (fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &h, sizeof (h));

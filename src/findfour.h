@@ -146,6 +146,7 @@ struct _Ventana {
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image, *nick_image_blue;
+extern SDL_Surface * text_waiting;
 
 extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
