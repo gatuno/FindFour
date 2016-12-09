@@ -1,6 +1,6 @@
-AC_INIT([Find Four], [0.8.3], [], [findfour])
+AC_INIT([Find Four], [0.8.4], [], [findfour])
 
-AC_REVISION([Revision 3])
+AC_REVISION([Revision 4])
 
 AC_CONFIG_AUX_DIR([build-aux])
 
@@ -11,42 +11,19 @@ AC_PREFIX_DEFAULT([/usr])
 
 # We need Gcc
 AC_PROG_CC
+AC_PROG_OBJC
 
 # and automake
 AM_INIT_AUTOMAKE([-Wall -Werror])
 
+# Translate this program
+#AM_GNU_GETTEXT_VERSION([0.19.3])
+#AM_GNU_GETTEXT([external])
+
+#ALL_LINGUAS="de es fr pt en"
+#AC_SUBST(ALL_LINGUAS)
+
 AM_PROG_CC_C_O
-
-# Check for pkg-config
-PKG_PROG_PKG_CONFIG
-
-SDL_VERSION=1.2.14
-SDL_IMAGE_VERSION=1.2.10
-SDL_TTF_VERSION=2.0.11
-SDL_MIXER_VERSION=1.2.12
-
-AC_MSG_CHECKING([if you have SDL installed on your system])
-PKG_CHECK_EXISTS([sdl >= $SDL_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL not found in your system])])
-PKG_CHECK_MODULES(SDL, [sdl >= $SDL_VERSION], [], [])
-
-AC_MSG_CHECKING([if you have SDL_image installed on your system])
-PKG_CHECK_EXISTS([SDL_image >= $SDL_IMAGE_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_image not found in your system])])
-PKG_CHECK_MODULES(SDL_image, [SDL_image >= $SDL_IMAGE_VERSION], [], [])
-
-AC_MSG_CHECKING([if you have SDL_ttf installed on your system])
-PKG_CHECK_EXISTS([SDL_ttf >= $SDL_TTF_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_ttf not found in your system])])
-PKG_CHECK_MODULES(SDL_ttf, [SDL_ttf >= $SDL_TTF_VERSION], [], [])
-
-AC_MSG_CHECKING([if you have SDL_mixer installed on your system])
-PKG_CHECK_EXISTS([SDL_mixer >= $SDL_MIXER_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_mixer not found in your system])])
-PKG_CHECK_MODULES(SDL_mixer, [SDL_mixer >= $SDL_MIXER_VERSION], [], [])
-
-AC_CONFIG_HEADERS([config.h])
-
-AC_CHECK_TOOL(WINDRES, windres)
-
-# Checar si getifaddrs existe
-AC_CHECK_FUNCS(getifaddrs)
 
 # Revisar el host
 AC_CANONICAL_HOST
@@ -72,37 +49,71 @@ AM_CONDITIONAL(MINGW32, test x$MINGW32 = xyes)
 AM_CONDITIONAL(LINUX, test x$LINUX = xyes)
 AM_CONDITIONAL(MACOSX, test x$MACOSX = xyes)
 
-dnl ----------------------------------------
-dnl Mac requires libintl to be linked statically and doesn't make that easy
-dnl gettext project (for libintl) refuses to support use of pkg-config but doesn't provide an
-dnl equivalent way to get the lib directory it is installed in. This requires use of --with-libintl-prefix configure option.
-dnl ---------------------------------------
-if test "x$MACOSX" = xyes; then
-  LIBS="$LIBS_NOGETTEXT"
-  if test -z "$with_libintl_prefix" ; then
-    AC_MSG_ERROR([On MacOS --with-libintl-prefix must be specified to find lib/libintl.a for static link])
-  fi
-  if test -d "${with_libintl_prefix}/lib" && test -f "${with_libintl_prefix}/lib/libintl.a" ; then
-    LIBINTL="${with_libintl_prefix}/lib/libintl.a"
-    LIBS="$LIBINTL /usr/lib/libiconv.dylib $LIBS"
-  else
-    AC_MSG_ERROR([The specified --with-libintl-prefix did not contain lib/libintl.a which is required on MacOS for static link])
-  fi
+# Check for pkg-config
+if test "x$MACOSX" = xno; then
+dnl En Mac no es necesario el pkg-config, porque se usan los frameworks
+	PKG_PROG_PKG_CONFIG
 fi
+
+SDL_VERSION=1.2.14
+SDL_IMAGE_VERSION=1.2.10
+SDL_TTF_VERSION=2.0.11
+SDL_MIXER_VERSION=1.2.12
+
+if test "x$MACOSX" = xyes; then
+	AC_MSG_WARN([*******************************************************])
+	AC_MSG_WARN([Cannot check if SDL librarys are installed on MAC OS X.])
+	AC_MSG_WARN([The following code assumes that the Frameworks are installed on the system locations])
+	AC_MSG_WARN([If they are not, use the --with-frameworks option])
+	AC_MSG_WARN([*******************************************************])
+	
+	SDL_FRAMEWORKS="SDL SDL_image SDL_mixer SDL_ttf CPStamp"
+	
+	for g in $SDL_FRAMEWORKS; do
+		AC_LIB_APPENDTOVAR([CPPFLAGS], [-I/Library/Frameworks/$g.framework/Headers])
+	done
+	AC_ARG_WITH([frameworks], [AS_HELP_STRING(
+		[--with-frameworks=DIRS],
+		[add to DIRS (space separated) to the Darwin include path for frameworks with -F]
+	)], [
+		for cy_framework in $withval; do
+			AC_LIB_APPENDTOVAR([CFLAGS], [-F$cy_framework])
+			AC_LIB_APPENDTOVAR([CXXFLAGS], [-F$cy_framework])
+			AC_LIB_APPENDTOVAR([OBJCCXXFLAGS], [-F$cy_framework])
+			for g in $SDL_FRAMEWORKS; do
+				AC_LIB_APPENDTOVAR([CPPFLAGS], [-I$cy_framework/$g.framework/Headers])
+			done
+		done
+	])
+	
+	AC_LIB_APPENDTOVAR([LIBS], ["-framework AudioToolbox -framework AudioUnit -framework Cocoa -framework CoreAudio -framework IOKit -framework CoreFoundation -framework Carbon -framework CoreServices -framework ApplicationServices -framework Foundation -framework AppKit -framework OpenGL -framework SDL -framework SDL_image -framework SDL_mixer -framework SDL_ttf -framework CPStamp"])
+else
+	AC_MSG_CHECKING([if you have SDL installed on your system])
+	PKG_CHECK_EXISTS([sdl >= $SDL_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL not found in your system])])
+	PKG_CHECK_MODULES(SDL, [sdl >= $SDL_VERSION], [], [])
+
+	AC_MSG_CHECKING([if you have SDL_image installed on your system])
+	PKG_CHECK_EXISTS([SDL_image >= $SDL_IMAGE_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_image not found in your system])])
+	PKG_CHECK_MODULES(SDL_image, [SDL_image >= $SDL_IMAGE_VERSION], [], [])
+
+	AC_MSG_CHECKING([if you have SDL_ttf installed on your system])
+	PKG_CHECK_EXISTS([SDL_ttf >= $SDL_TTF_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_ttf not found in your system])])
+	PKG_CHECK_MODULES(SDL_ttf, [SDL_ttf >= $SDL_TTF_VERSION], [], [])
+
+	AC_MSG_CHECKING([if you have SDL_mixer installed on your system])
+	PKG_CHECK_EXISTS([SDL_mixer >= $SDL_MIXER_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL_mixer not found in your system])])
+	PKG_CHECK_MODULES(SDL_mixer, [SDL_mixer >= $SDL_MIXER_VERSION], [], [])
+fi
+AC_CONFIG_HEADERS([config.h])
+
+AC_CHECK_TOOL(WINDRES, windres)
+
+# Checar si getifaddrs existe
+AC_CHECK_FUNCS(getifaddrs)
 
 dnl Add -DMACOSX to CXXFLAGS and CFLAGS if working under darwin
 if test "x$MACOSX" = xyes; then
  CPPFLAGS="$CPPFLAGS -DMACOSX"
-fi
-
-dnl Add special hack for Mac framework SDL after all other SDL stuff has been done
-dnl Note that SDL development environment must be installed for the build but SDL frameworks must also be installed for the build
-dnl If we had libSDLmain.a, which is not included in the framework, we should be able to get away with only installing framework
-if test "x$MACOSX" = xyes; then
- AM_PATH_SDL(1.2.0)
- SDL_STATIC_PREFIX=`$SDL_CONFIG $sdl_config_args --prefix`
- SDL_LIBS="-Wl,-rpath,@loader_path/../Frameworks -framework AudioToolbox -framework AudioUnit -framework Cocoa -framework CoreAudio -framework IOKit -framework CoreFoundation -framework Carbon -framework CoreServices -framework ApplicationServices -framework Foundation -framework AppKit -framework OpenGL -framework SDL -framework SDL_mixer -framework SDL_image -framework SDL_ttf $SDL_STATIC_PREFIX/lib/libSDLmain.a"
-AC_SUBST(SDL_STATIC_PREFIX)
 fi
 
 AC_CONFIG_FILES([

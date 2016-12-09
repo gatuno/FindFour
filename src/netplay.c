@@ -152,7 +152,6 @@ int findfour_try_netinit4 (int puerto) {
 	ioctlsocket (fd, FIONBIO, &flags);
 	
 	/* Hacer join a los grupos multicast */
-	/* Hacer join a los grupos multicast */
 	/* Primero join al IPv4 */
 	mcast_addr.sin_family = AF_INET;
 	mcast_addr.sin_port = htons (puerto);
