@@ -257,7 +257,7 @@ void try_stun_binding_sockaddr (struct sockaddr_in *server) {
 	/* Cuando llegue la respuesta, guardar la IP */
 }
 
-void late_stun_connect (const struct addrinfo *res) {
+void late_stun_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
 	/* Localizar el primer resultado AF_INET*/
 	while (res != NULL) {
 		if (res->ai_addr->sa_family == AF_INET) {

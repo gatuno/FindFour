@@ -27,11 +27,12 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-typedef void (*ResolvCallback) (const struct addrinfo *res);
+typedef void (*ResolvCallback) (const char *hostname, int puerto, const struct addrinfo *res, int error, const char *err_str);
 
 void pending_query (void);
 void do_query (const char *hostname, int puerto, ResolvCallback callback);
 void init_resolver (void);
+void destroy_resolver (void);
 int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto, int default_port);
 
 #endif /* __RESOLV_H__ */

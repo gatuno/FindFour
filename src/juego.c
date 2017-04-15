@@ -639,10 +639,7 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 	}
 	
 	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
-	if (j->estado != NET_SYN_SENT) {
-		if (j->nick_remoto_image == NULL) {
-			printf ("Error!!!!!!. Estado = %i\n", j->estado);
-		}
+	if (j->estado != NET_SYN_SENT && j->nick_remoto_image != NULL) {
 		rect.x = j->ventana.x + 74;
 		rect.y = j->ventana.y + 272;
 		rect.w = j->nick_remoto_image->w;

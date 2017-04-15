@@ -235,9 +235,9 @@ void change_nick (InputBox *ib, const char *texto) {
 	eliminar_inputbox (ib);
 }
 
-void late_connect (const struct addrinfo *res) {
+void late_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
 	if (res == NULL) {
-		/* Mandar mensaje de error */
+		message_add (MSG_ERROR, "OK", "Error al resolver nombre '%s':\n%s", hostname, errstr);
 		return;
 	}
 	
@@ -309,6 +309,8 @@ int main (int argc, char *argv[]) {
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
+	
+	destroy_resolver ();
 	
 	SDL_Quit ();
 	return EXIT_SUCCESS;

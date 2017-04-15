@@ -119,7 +119,7 @@ void init_resolver (void) {
 		
 		use_non_fork_resolv = 1;
 		
-		fprintf (stderr, "Error al crear proceso para resolución de nombres\n");
+		//fprintf (stderr, "Error al crear proceso para resolución de nombres\n");
 		forked_child = 0;
 		return;
 	}
@@ -148,7 +148,7 @@ static void cancel_requests (void) {
 	while (node != NULL) {
 		next = node->next;
 		
-		node->callback (NULL);
+		node->callback (node->hostname, node->port, NULL, -1, "Canceled");
 		free (node);
 		
 		node = next;
@@ -157,9 +157,16 @@ static void cancel_requests (void) {
 	resolv_list = NULL;
 }
 
-static void destroy_resolver (void) {
+void destroy_resolver (void) {
 	if (forked_child > 0) {
 		kill(forked_child, SIGKILL);
+		/* Esperar al hijo muerto para hacer limpieza */
+		pid_t pid;
+		
+		pid = waitpid (forked_child, NULL, 0);
+		if (pid > 0) {
+			forked_child = 0;
+		}
 	}
 	
 	forked_child = 0;
@@ -175,15 +182,13 @@ static void write_to_parent(int fd, const void *buf, size_t count) {
 	ssize_t written;
 
 	written = write(fd, buf, count);
-	if (written < 0 || (size_t)written != count) {
-		if (written < 0)
-			fprintf(stderr, "dns[%d]: Error writing data to "
-					"parent: %s\n", getpid(), strerror(errno));
-		else
-			fprintf(stderr, "dns[%d]: Error: Tried to write %zu bytes to parent but instead "
-					"wrote %zd bytes\n",
-					getpid(), count, written);
-	}
+	/*if (written < 0 || (size_t)written != count) {
+		if (written < 0) {
+			fprintf(stderr, "dns[%d]: Error writing data to parent: %s\n", getpid(), strerror(errno));
+		} else {
+			fprintf(stderr, "dns[%d]: Error: Tried to write %zu bytes to parent but instead wrote %zd bytes\n", getpid(), count, written);
+		}
+	}*/
 }
 
 static void resolver_run (int child_out, int child_in) {
@@ -192,7 +197,6 @@ static void resolver_run (int child_out, int child_in) {
 	int rc;
 	struct addrinfo hints, *res, *tmp;
 	char servname[20];
-	char *hostname;
 	
 	while (1) {
 		rc = read(child_in, &dns_params, sizeof(dns_params_t));
@@ -212,23 +216,18 @@ static void resolver_run (int child_out, int child_in) {
 			_exit(1);
 		}
 		
-		hostname = strdup(dns_params.hostname);
-		
 		snprintf(servname, sizeof(servname), "%d", dns_params.port);
 		memset(&hints, 0, sizeof(hints));
 
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags |= AI_ADDRCONFIG;
 		
-		rc = getaddrinfo(hostname, servname, &hints, &res);
+		rc = getaddrinfo(dns_params.hostname, servname, &hints, &res);
 		write_to_parent(child_out, &rc, sizeof(rc));
 		if (rc != 0) {
 			printf("dns[%d] Error: getaddrinfo returned %d\n",
 					getpid(), rc);
 			dns_params.hostname[0] = '\0';
-			free(hostname);
-			hostname = NULL;
-			//break;
 			continue;
 		}
 		tmp = res;
@@ -242,9 +241,6 @@ static void resolver_run (int child_out, int child_in) {
 		
 		write_to_parent(child_out, &zero, sizeof(zero));
 		dns_params.hostname[0] = '\0';
-
-		free(hostname);
-		hostname = NULL;
 	}
 	
 	close (child_out);
@@ -270,12 +266,12 @@ void resolv_non_fork (const char *hostname, int puerto, ResolvCallback callback)
 	rc = getaddrinfo(hostname, servname, &hints, &res);
 	
 	if (rc < 0) {
-		callback (NULL);
+		callback (hostname, puerto, NULL, rc, gai_strerror (rc));
 		
 		return;
 	}
 	
-	callback (res);
+	callback (hostname, puerto, res, 0, NULL);
 	
 	freeaddrinfo (res);
 }
@@ -287,12 +283,11 @@ static int send_dns_request_to_child (const char *hostname, int puerto) {
 	
 	pid = waitpid (forked_child, NULL, WNOHANG);
 	if (pid > 0) {
-		fprintf (stderr, "dns: DNS child %d no longer exists\n", forked_child);
+		//fprintf (stderr, "dns: DNS child %d no longer exists\n", forked_child);
 		forked_child = 0;
 		destroy_resolver ();
 	} else if (pid < 0) {
-		fprintf (stderr, "dns: Wait for DNS child %d failed: %s\n",
-				forked_child, strerror (errno));
+		//fprintf (stderr, "dns: Wait for DNS child %d failed: %s\n", forked_child, strerror (errno));
 		destroy_resolver ();
 	}
 	
@@ -309,14 +304,12 @@ static int send_dns_request_to_child (const char *hostname, int puerto) {
 	/* Send the data structure to the child */
 	rc = write(child_in, &dns_params, sizeof(dns_params));
 	if (rc < 0) {
-		fprintf (stderr, "dns: Unable to write to DNS child %d: %s\n",
-				forked_child, strerror(errno));
+		//fprintf (stderr, "dns: Unable to write to DNS child %d: %s\n", forked_child, strerror(errno));
 		destroy_resolver ();
 		return FALSE;
 	}
 	if ((size_t)rc < sizeof(dns_params)) {
-		fprintf (stderr, "dns: Tried to write %zu bytes to child but only wrote %zd\n",
-				sizeof(dns_params), rc);
+		//fprintf (stderr, "dns: Tried to write %zu bytes to child but only wrote %zd\n", sizeof(dns_params), rc);
 		destroy_resolver ();
 		return FALSE;
 	}
@@ -335,7 +328,7 @@ void do_query (const char *hostname, int puerto, ResolvCallback callback) {
 	res = send_dns_request_to_child (hostname, puerto);
 	
 	if (res == FALSE) {
-		callback (NULL);
+		callback (hostname, puerto, NULL, 0, "Unknown error");
 		return;
 	}
 	
@@ -389,15 +382,16 @@ void pending_query (void) {
 		perror ("Error reading from resolver process");
 		/* ¿Debería destruir la lista de consultas pendientes */
 	} else if (rc == 0) {
-		fprintf (stderr, "Resolver process exited without answering our request\n");
+		//fprintf (stderr, "Resolver process exited without answering our request\n");
+		destroy_resolver ();
 	} else if (rc == 4 && err != 0) {
 		if (resolv_list == NULL) {
-			fprintf (stderr, "Advertencia: Resolución no solicitada\n");
+			//fprintf (stderr, "Advertencia: Resolución no solicitada\n");
 			return;
 		}
-		fprintf (stderr, "Error resolving %s:\n%s\n", resolv_list->hostname, gai_strerror (err));
+		//fprintf (stderr, "Error resolving %s:\n%s\n", resolv_list->hostname, gai_strerror (err));
 		
-		resolv_list->callback (NULL);
+		resolv_list->callback (resolv_list->hostname, resolv_list->port, NULL, err, gai_strerror (err));
 		
 		/* Quitar de la lista */
 		next = resolv_list->next;
@@ -428,7 +422,7 @@ void pending_query (void) {
 			}
 		}
 		/* Ejecutar la llamada */
-		resolv_list->callback (ip_list);
+		resolv_list->callback (resolv_list->hostname, resolv_list->port, ip_list, 0, NULL);
 		
 		free_local_addrinfo (ip_list);
 		/* Quitar de la lista */
