@@ -1,6 +1,6 @@
-AC_INIT([Find Four], [0.8.4], [], [findfour])
+AC_INIT([Find Four], [0.8.5], [], [findfour])
 
-AC_REVISION([Revision 4])
+AC_REVISION([Revision 5])
 
 AC_CONFIG_AUX_DIR([build-aux])
 
@@ -24,6 +24,20 @@ AM_INIT_AUTOMAKE([-Wall -Werror])
 #AC_SUBST(ALL_LINGUAS)
 
 AM_PROG_CC_C_O
+
+# We need to know if we have a working version of fork
+AC_ARG_ENABLE(fork-resolv,
+AC_HELP_STRING([--enable-fork-resolv],
+	       [enable support for async resolv names using fork (default is YES)]),
+[case "${enableval}" in
+  yes) enable_fork_resolv=true ;;
+  no)  enable_fork_resolv=false ;;
+  *)   AC_MSG_ERROR(bad value ${enableval} for --enable-fork-resolv) ;;
+esac], [enable_fork_resolv=true])
+
+if test "xtrue" = x"$enable_fork_resolv"; then
+	AC_FUNC_FORK
+fi
 
 # Revisar el host
 AC_CANONICAL_HOST

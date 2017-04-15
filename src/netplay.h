@@ -150,5 +150,11 @@ void enviar_fin (Juego *);
 void enviar_broadcast_game (char *nick);
 void enviar_end_broadcast_game (void);
 
+#ifdef __MINGW32__
+SOCKET findfour_get_socket4 (void);
+#else
+int findfour_get_socket4 (void);
+#endif
+
 #endif /* __NETPLAY_H__ */
 

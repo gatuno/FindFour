@@ -59,6 +59,7 @@
 #include "utf8.h"
 #include "draw-text.h"
 #include "message.h"
+#include "resolv.h"
 
 #define FPS (1000/24)
 
@@ -186,64 +187,6 @@ void set_last_window (Ventana *v) {
 	ultimo = v;
 }
 
-/* Analizador de urls básico */
-int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto) {
-	char *p, *port, *invalid;
-	int g;
-	
-	if (cadena[0] == 0) {
-		hostname[0] = 0;
-		return FALSE;
-	}
-	
-	*puerto = 3300;
-	
-	if (cadena[0] == '[') {
-		/* Es una ip literal, buscar por otro ] de cierre */
-		p = strchr (cadena, ']');
-		
-		if (p == NULL) {
-			/* Error, no hay cierre */
-			hostname[0] = 0;
-			return FALSE;
-		}
-		strncpy (hostname, &cadena[1], p - cadena - 1);
-		hostname [p - cadena - 1] = 0;
-		p++;
-		cadena = p;
-	} else {
-		/* Nombre de host directo */
-		port = strchr (cadena, ':');
-		
-		if (port == NULL) {
-			/* No hay puerto, sólo host directo */
-			strcpy (hostname, cadena);
-			
-			return TRUE;
-		} else {
-			/* Copiar hasta antes del ":" */
-			strncpy (hostname, cadena, port - cadena);
-			hostname [port - cadena] = 0;
-		}
-		cadena = port;
-	}
-	
-	/* Buscar por un posible ":" */
-	if (cadena[0] == ':') {
-		g = strtol (&cadena[1], &invalid, 10);
-		
-		if (invalid[0] != 0 || g > 65535) {
-			/* Caracteres sobrantes */
-			hostname[0] = 0;
-			return FALSE;
-		}
-		
-		*puerto = g;
-	}
-	
-	return TRUE;
-}
-
 void render_nick (void) {
 	SDL_Color blanco, negro;
 	
@@ -293,6 +236,20 @@ void change_nick (InputBox *ib, const char *texto) {
 	eliminar_inputbox (ib);
 }
 
+void late_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
+	if (res == NULL) {
+		message_add (MSG_ERROR, "OK", "Error al resolver nombre '%s':\n%s", hostname, errstr);
+		return;
+	}
+	
+	Ventana *ventana;
+	
+	ventana = (Ventana *) crear_juego (TRUE);
+		
+	/* Agregar la conexión a las partidas recientes */
+	conectar_con_sockaddr ((Juego *) ventana, nick_global, res->ai_addr, res->ai_addrlen);
+}
+
 void nueva_conexion (InputBox *ib, const char *texto) {
 	int valido, puerto;
 	char *hostname;
@@ -307,16 +264,13 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	}
 	hostname = strdup (texto);
 	
-	valido = analizador_hostname_puerto (texto, hostname, &puerto);
+	valido = analizador_hostname_puerto (texto, hostname, &puerto, 3300);
 	
 	if (valido) {
-		/* Pasar a intentar hacer una conexión */
-		ventana = (Ventana *) crear_juego (TRUE);
+		/* Ejecutar la resolución de nombres primero, conectar después */
+		do_query (hostname, puerto, late_connect);
 		
-		/* Agregar la conexión a las partidas recientes */
 		buddy_list_recent_add (texto);
-		
-		conectar_con ((Juego *) ventana, nick_global, hostname, puerto);
 	} else {
 		/* Mandar un mensaje de error */
 	}
@@ -334,6 +288,8 @@ void cancelar_conexion (InputBox *ib, const char *texto) {
 
 int main (int argc, char *argv[]) {
 	int r;
+
+	init_resolver ();
 	
 	initSystemPaths (argv[0]);
 	
@@ -354,6 +310,8 @@ int main (int argc, char *argv[]) {
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
+	
+	destroy_resolver ();
 	
 	SDL_Quit ();
 	return EXIT_SUCCESS;

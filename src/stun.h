@@ -128,7 +128,7 @@ typedef struct {
 	StunAtrAddress4 secondaryAddress;
 } StunMessage;
 
-void try_stun_binding (const char *server, int fd_socket);
+void try_stun_binding (const char *server);
 void parse_stun_message (const char *buffer, int buffer_len);
 
 #endif /* __STUN_H__ */
