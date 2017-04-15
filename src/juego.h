@@ -34,6 +34,7 @@
 #include <SDL.h>
 
 #include "findfour.h"
+#include "ventana.h"
 
 typedef struct {
 	int fila, col, frame, color;
@@ -41,7 +42,7 @@ typedef struct {
 
 /* Estructuras */
 typedef struct _Juego {
-	Ventana ventana;
+	Ventana *ventana;
 	
 	/* Quién empieza el juego y el turno actual */
 	int inicio;
@@ -74,9 +75,12 @@ typedef struct _Juego {
 	/* Para animación */
 	int num_a;
 	Anim animaciones[4];
+	
+	struct _Juego *next;
 } Juego;
 
 /* Funciones públicas */
+Juego *get_game_list (void);
 Juego *crear_juego (int top_window);
 void eliminar_juego (Juego *);
 void recibir_movimiento (Juego *, int turno, int col, int fila);

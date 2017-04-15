@@ -25,6 +25,8 @@
 #include <SDL_ttf.h>
 #include <SDL_mixer.h>
 
+#include "inputbox.h"
+
 #define NICK_SIZE 16
 
 #define RANDOM(x) ((int) (x ## .0 * rand () / (RAND_MAX + 1.0)))
@@ -117,32 +119,6 @@ enum {
 	NUM_WINDOWS
 };
 
-typedef struct _Ventana Ventana;
-typedef int (*FindWindowMouseFunc)(Ventana *, int, int, int **);
-typedef void (*FindWindowDraw)(Ventana *, SDL_Surface *);
-typedef int (*FindWindowKeyFunc)(Ventana *, SDL_KeyboardEvent *);
-
-struct _Ventana {
-	int tipo;
-	
-	/* Coordenadas de la ventana */
-	int x, y;
-	int w, h;
-	
-	/* Para la lista ligada */
-	Ventana *prev, *next;
-	
-	int mostrar;
-	
-	/* Manejadores de la ventana */
-	FindWindowMouseFunc mouse_down;
-	FindWindowMouseFunc mouse_motion;
-	FindWindowMouseFunc mouse_up;
-	FindWindowDraw draw;
-	FindWindowKeyFunc key_down;
-	FindWindowKeyFunc key_up;
-};
-
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image, *nick_image_blue;
@@ -152,15 +128,9 @@ extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
 
 extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
+void nueva_conexion (InputBox *ib, const char *texto);
 
-Ventana *get_first_window (void);
-Ventana *get_last_window (void);
-void set_first_window (Ventana *v);
-void set_last_window (Ventana *v);
-
-void start_drag (Ventana *v, int offset_x, int offset_y);
-void stop_drag (Ventana *v);
-void full_stop_drag (void);
+void findfour_default_keyboard_handler (SDL_KeyboardEvent *key);
 
 #endif /* __FINDFOUR_H__ */
 

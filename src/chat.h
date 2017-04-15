@@ -34,6 +34,7 @@
 #include <sys/types.h>
 
 #include "findfour.h"
+#include "ventana.h"
 
 enum {
 	CHAT_LIST_MCAST = 0,
@@ -70,7 +71,7 @@ typedef struct _RecentPlay {
 } RecentPlay;
 
 typedef struct _Chat {
-	Ventana ventana;
+	Ventana *ventana;
 	
 	/* El botón de cierre */
 	int close_frame; /* ¿El refresh es necesario? */
@@ -89,6 +90,8 @@ typedef struct _Chat {
 	
 	int list_display;
 	int list_offset;
+	
+	Uint32 azul1;
 	
 	/* Los buddys encontrados por red */
 	BuddyMCast *buddy_mcast;

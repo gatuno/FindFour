@@ -41,61 +41,45 @@
 #include "cp-button.h"
 #include "draw-text.h"
 #include "message.h"
+#include "ventana.h"
 
 #define ANIM_VEL 2
 
-int juego_mouse_down (Juego *j, int x, int y, int **button_map);
-int juego_mouse_motion (Juego *j, int x, int y, int **button_map);
-int juego_mouse_up (Juego *j, int x, int y, int **button_map);
-void juego_draw (Juego *j, SDL_Surface *screen);
+int juego_mouse_down (Ventana *v, int x, int y, int **button_map);
+int juego_mouse_motion (Ventana *v, int x, int y, int **button_map);
+int juego_mouse_up (Ventana *v, int x, int y, int **button_map);
+void juego_draw (Ventana *v, SDL_Surface *surface);
 
 /* Algunas constantes */
 const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
 const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
 
+static Juego *network_game_list = NULL;
+
+Juego *get_game_list (void) {
+	return network_game_list;
+}
+
 Juego *crear_juego (int top_window) {
-	Juego *j;
-	static int start_x = 0, start_y = 0;
-	Juego *lista;
+	Juego *j, *lista;
 	int correct;
 	
-	/* Crear una nueva ventana */
+	/* Crear un nuevo objeto Juego */
 	j = (Juego *) malloc (sizeof (Juego));
 	
-	j->ventana.w = 232; /* FIXME: Arreglar esto */
-	j->ventana.h = 324;
+	/* Crear una ventana */
+	j->ventana = window_create (232, 324, top_window);
+	window_set_data (j->ventana, j);
 	
-	j->ventana.tipo = WINDOW_GAME;
-	j->ventana.mostrar = TRUE;
+	window_register_mouse_events (j->ventana, juego_mouse_down, juego_mouse_motion, juego_mouse_up);
 	
-	j->ventana.mouse_down = (FindWindowMouseFunc) juego_mouse_down;
-	j->ventana.mouse_motion = (FindWindowMouseFunc) juego_mouse_motion;
-	j->ventana.mouse_up = (FindWindowMouseFunc) juego_mouse_up;
-	j->ventana.draw = (FindWindowDraw) juego_draw;
-	j->ventana.key_down = NULL;
-	j->ventana.key_up = NULL;
-	
+	/* Valores propios del juego */
 	j->turno = 0;
 	j->win = 0;
 	j->inicio = -1;
 	j->resalte = -1;
 	j->timer = 0;
 	j->close_frame = IMG_BUTTON_CLOSE_UP;
-	
-	if (start_y + j->ventana.h >= 480) {
-		start_y = 0;
-		start_x += 20;
-	}
-	
-	if (start_x + j->ventana.w >= 760) {
-		start_x = 0;
-	}
-	
-	j->ventana.x = start_x;
-	j->ventana.y = start_y;
-	
-	start_x += 20;
-	start_y += 20;
 	
 	j->local = j->remote = 0;
 	j->retry = 0;
@@ -112,64 +96,31 @@ Juego *crear_juego (int top_window) {
 	j->nick_remoto_image = NULL;
 	j->nick_remoto_image_blue = NULL;
 	
-	if (top_window || get_first_window () == NULL) {
-		/* Si pidieron ser ventana al frente, mostrarla */
-		j->ventana.prev = NULL;
-		j->ventana.next = get_first_window ();
-		if (get_first_window () == NULL) {
-			set_last_window ((Ventana *) j);
-		} else {
-			get_first_window ()->prev = (Ventana *) j;
-		}
-	
-		set_first_window ((Ventana *) j);
-	} else {
-		/* En caso contrario, mandarla hacia abajo de la primera ventana */
-		j->ventana.prev = get_first_window ();
-		j->ventana.next = get_first_window ()->next;
-		
-		get_first_window ()->next = (Ventana *) j;
-		
-		/* Si tiene next, cambiar su prev */
-		if (j->ventana.next == NULL) {
-			set_last_window ((Ventana *) j);
-		} else {
-			j->ventana.next->prev = ((Ventana *) j);
-		}
-	}
-	
 	/* Generar un número local aleatorio */
 	do {
 		correct = 0;
 		j->local = 1 + RANDOM (65534);
 		
-		lista = (Juego *) get_first_window ();
+		lista = network_game_list;
 		while (lista != NULL) {
-			if (lista->ventana.tipo != WINDOW_GAME || lista == j) {
-				lista = (Juego *) lista->ventana.next;
-				continue;
-			}
 			if (lista->local == j->local) correct = 1;
-			lista = (Juego *) lista->ventana.next;
+			lista = lista->next;
 		}
 	} while (correct);
+	
+	/* Ligar el nuevo objeto juego */
+	j->next = network_game_list;
+	network_game_list = j;
 	
 	return j;
 }
 
 void eliminar_juego (Juego *j) {
 	/* Desligar completamente */
-	Ventana *v = (Ventana *) j;
-	if (v->prev != NULL) {
-		v->prev->next = v->next;
-	} else {
-		set_first_window (v->next);
-	}
-	
-	if (v->next != NULL) {
-		v->next->prev = v->prev;
-	} else {
-		set_last_window (v->prev);
+	if (j->ventana != NULL) {
+		/* Destruir la ventana asociada con este juego */
+		window_destroy (j->ventana);
+		j->ventana = NULL;
 	}
 	
 	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
@@ -182,19 +133,36 @@ void eliminar_juego (Juego *j) {
 	
 	if (j->nick_remoto_image != NULL) SDL_FreeSurface (j->nick_remoto_image);
 	if (j->nick_remoto_image_blue != NULL) SDL_FreeSurface (j->nick_remoto_image_blue);
-	stop_drag ((Ventana *) j);
+	
+	/* Sacar de la lista ligada simple */
+	if (network_game_list == j) {
+		/* Primero */
+		network_game_list = j->next;
+	} else {
+		Juego *prev;
+		
+		prev = network_game_list;
+		while (prev->next != j) prev = prev->next;
+		
+		prev->next = j->next;
+	}
+	
 	free (j);
 }
 
-int juego_mouse_down (Juego *j, int x, int y, int **button_map) {
-	if (j->ventana.mostrar == FALSE) return FALSE;
+int juego_mouse_down (Ventana *v, int x, int y, int **button_map) {
+	Juego *j;
+	j = (Juego *) window_get_data (v);
+	
 	if (x >= 64 && x < 168 && y < 22) {
 		/* Click por el agarre */
-		start_drag ((Ventana *) j, x, y);
+		window_start_drag (v, x, y);
 		return TRUE;
 	} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
+		/* FIXME: Arreglar lo de los botones */
 		*button_map = &(j->close_frame);
+		window_want_redraw (v);
 		return TRUE;
 	} else if (y >= 16) {
 		/* El evento cae dentro de la ventana */
@@ -204,8 +172,11 @@ int juego_mouse_down (Juego *j, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
-	if (j->ventana.mostrar == FALSE) return FALSE;
+int juego_mouse_motion (Ventana *v, int x, int y, int **button_map) {
+	Juego *j;
+	
+	j = (Juego *) window_get_data (v);
+	
 	/* Primero, quitar el resalte */
 	j->resalte = -1;
 	
@@ -228,11 +199,15 @@ int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
 		} else if (x >= 178 && x < 206 && j->tablero[0][6] == 0) {
 			j->resalte = 6;
 		}
+		
+		window_want_redraw (v);
 	}
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
+		/* FIXME: Arreglar lo de los botones */
 		*button_map = &(j->close_frame);
+		window_want_redraw (v);
 		return TRUE;
 	}
 	if ((y >= 16) || (x >= 64 && x < 168)) {
@@ -243,10 +218,11 @@ int juego_mouse_motion (Juego *j, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
+int juego_mouse_up (Ventana *v, int x, int y, int **button_map) {
 	int g, h;
 	
-	if (j->ventana.mostrar == FALSE) return FALSE;
+	Juego *j;
+	j = (Juego *) window_get_data (v);
 	
 	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY && j->num_a == 0) {
 		/* Está dentro del tablero */
@@ -305,6 +281,7 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 			j->num_a++;
 			
 			j->tablero[g][h] = 0;
+			window_want_redraw (v);
 		}
 	}
 	
@@ -312,12 +289,16 @@ int juego_mouse_up (Juego *j, int x, int y, int **button_map) {
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
 		*button_map = &(j->close_frame);
+		window_want_redraw (v);
 		if (cp_button_up (*button_map)) {
 			/* Quitar esta ventana */
 			if (j->estado != NET_CLOSED) {
 				j->last_fin = NET_USER_QUIT;
 				j->retry = 0;
-				j->ventana.mostrar = FALSE;
+				/* Destruir la ventana asociada con este juego */
+				window_destroy (j->ventana);
+				j->ventana = NULL;
+				
 				enviar_fin (j);
 			} else {
 				eliminar_juego (j);
@@ -447,17 +428,17 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 		} else {
 			printf ("Número de turno equivocado\n");
 			j->last_fin = NET_DISCONNECT_WRONG_TURN;
-			enviar_fin (j);
+			goto fin_and_close;
 		}
 	} else if (j->turno % 2 == j->inicio) {
 		printf ("Es nuestro turno, cerrar esta conexión\n");
 		j->last_fin = NET_DISCONNECT_WRONG_TURN;
-		enviar_fin (j);
+		goto fin_and_close;
 	} else if (j->tablero[0][col] != 0) {
 		/* Tablero lleno, columna equivocada */
 		printf ("Columna llena, no deberias poner fichas ahí\n");
 		j->last_fin = NET_DISCONNECT_WRONG_MOV;
-		enviar_fin (j);
+		goto fin_and_close;
 	} else {
 		g = 5;
 		while (g > 0 && j->tablero[g][col] != 0) g--;
@@ -466,7 +447,7 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 		if (g != fila) {
 			printf ("La ficha de mi lado cayó en la fila incorrecta\n");
 			j->last_fin = NET_DISCONNECT_WRONG_MOV;
-			enviar_fin (j);
+			goto fin_and_close;
 		} else {
 			j->tablero[g][col] = (j->turno % 2) + 1;
 			j->turno++;
@@ -504,57 +485,65 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 	for (g = 0; g < j->num_a; g++) {
 		j->tablero[j->animaciones[g].fila][j->animaciones[g].col] = 0;
 	}
+	
+	return;
+fin_and_close:
+	enviar_fin (j);
+	
+	/* Cerrar la ventana asociada porque caimos en condición de error */
+	if (j->ventana != NULL) {
+		/* Destruir la ventana asociada con este juego */
+		window_destroy (j->ventana);
+		j->ventana = NULL;
+	}
 }
 
-void juego_draw (Juego *j, SDL_Surface *screen) {
+void juego_draw (Ventana *v, SDL_Surface *surface) {
 	SDL_Rect rect, rect2;
 	int g, h;
 	
-	rect.x = j->ventana.x;
-	rect.y = j->ventana.y;
-	rect.w = j->ventana.w;
-	rect.h = j->ventana.h;
+	Juego *j = (Juego *) window_get_data (v);
 	
-	SDL_BlitSurface (images[IMG_WINDOW], NULL, screen, &rect);
+	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, &rect);
 	
 	/* Dibujar el botón de cierre */
-	rect.x = j->ventana.x + 192;
-	rect.y = j->ventana.y + 26;
+	rect.x = 192;
+	rect.y = 26;
 	rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
 	rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
 	
-	SDL_BlitSurface (images[j->close_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[j->close_frame], NULL, surface, &rect);
 	
 	/* dibujar las fichas antes del tablero */
 	for (g = 0; g < 6; g++) {
 		for (h = 0; h < 7; h++) {
 			if (j->tablero[g][h] == 0) continue;
-			rect.x = j->ventana.x + tablero_cols[h];
-			rect.y = j->ventana.y + tablero_filas[g];
+			rect.x = tablero_cols[h];
+			rect.y = tablero_filas[g];
 			
 			rect.w = images[IMG_COINBLUE]->w;
 			rect.h = images[IMG_COINBLUE]->h;
 			
 			if (j->tablero[g][h] == 1) {
-				SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
 			} else {
-				SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
 			}
 		}
 	}
 	
 	/* Dibujar la ficha en plena animación */
 	if (j->num_a > 0) {
-		rect.x = j->ventana.x + tablero_cols[j->animaciones[0].col];
+		rect.x = tablero_cols[j->animaciones[0].col];
 		g = j->animaciones[0].frame / ANIM_VEL;
-		rect.y = j->ventana.y + tablero_filas[g];
+		rect.y = tablero_filas[g];
 		rect.w = images[IMG_COINBLUE]->w;
 		rect.h = images[IMG_COINBLUE]->h;
 		
 		if (j->animaciones[0].color == 1) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
 		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
 		}
 		
 		j->animaciones[0].frame++;
@@ -571,17 +560,17 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		}
 	}
 	
-	rect.x = j->ventana.x + 26;
-	rect.y = j->ventana.y + 65;
+	rect.x = 26;
+	rect.y = 65;
 	rect.w = images[IMG_BOARD]->w;
 	rect.h = images[IMG_BOARD]->h;
 	
-	SDL_BlitSurface (images[IMG_BOARD], NULL, screen, &rect);
+	SDL_BlitSurface (images[IMG_BOARD], NULL, surface, &rect);
 	
 	/* Los botones de carga */
 	if (j->estado == NET_SYN_SENT) {
-		rect.x = j->ventana.x + 39;
-		rect.y = j->ventana.y + 235;
+		rect.x = 39;
+		rect.y = 235;
 		rect.w = 32;
 		rect.h = 32;
 	
@@ -589,10 +578,10 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		rect2.y = 0;
 		rect2.w = rect2.h = 32;
 	
-		SDL_BlitSurface (images[IMG_LOADING], &rect2, screen, &rect);
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
 	
-		rect.x = j->ventana.x + 39;
-		rect.y = j->ventana.y + 265;
+		rect.x = 39;
+		rect.y = 265;
 		rect.w = 32;
 		rect.h = 32;
 	
@@ -600,59 +589,59 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 		rect2.y = 0;
 		rect2.w = rect2.h = 32;
 		
-		SDL_BlitSurface (images[IMG_LOADING], &rect2, screen, &rect);
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
 	} else {
 		/* Dibujar las fichas de colores */
-		rect.x = j->ventana.x + 43;
-		rect.y = j->ventana.y + 239;
+		rect.x = 43;
+		rect.y = 239;
 		rect.w = images[IMG_COINRED]->w;
 		rect.h = images[IMG_COINRED]->h;
 		
 		if (j->inicio == 0) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
 		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
 		}
 		
-		rect.x = j->ventana.x + 43;
-		rect.y = j->ventana.y + 269;
+		rect.x = 43;
+		rect.y = 269;
 		rect.w = images[IMG_COINRED]->w;
 		rect.h = images[IMG_COINRED]->h;
 		
 		if (j->inicio != 0) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
 		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
 		}
 	}
 	
 	/* Dibujar el nombre del jugador local */
-	rect.x = j->ventana.x + 74;
-	rect.y = j->ventana.y + 242;
+	rect.x = 74;
+	rect.y = 242;
 	rect.w = nick_image->w;
 	rect.h = nick_image->h;
 	
 	if (j->estado == NET_SYN_SENT) {
-		SDL_BlitSurface (nick_image_blue, NULL, screen, &rect);
+		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
 	} else {
-		SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, screen, &rect);
+		SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
 	}
 	
 	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
 	if (j->estado != NET_SYN_SENT && j->nick_remoto_image != NULL) {
-		rect.x = j->ventana.x + 74;
-		rect.y = j->ventana.y + 272;
+		rect.x = 74;
+		rect.y = 272;
 		rect.w = j->nick_remoto_image->w;
 		rect.h = j->nick_remoto_image->h;
 		
-		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, screen, &rect);
+		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
 	} else {
-		rect.x = j->ventana.x + 74;
-		rect.y = j->ventana.y + 272;
+		rect.x = 74;
+		rect.y = 272;
 		rect.w = text_waiting->w;
 		rect.h = text_waiting->h;
 		
-		SDL_BlitSurface (text_waiting, NULL, screen, &rect);
+		SDL_BlitSurface (text_waiting, NULL, surface, &rect);
 	}
 	
 	j->timer++;
@@ -660,37 +649,36 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 	
 	if (j->resalte >= 0) {
 		/* Dibujar la ficha resaltada en la columna correspondiente */
-		rect.x = j->ventana.x;
-		rect.y = j->ventana.y + 46;
+		rect.y = 46;
 		switch (j->resalte) {
 			case 0:
-				rect.x += 30;
+				rect.x = 30;
 				break;
 			case 1:
-				rect.x += 53;
+				rect.x = 53;
 				break;
 			case 2:
-				rect.x += 79;
+				rect.x = 79;
 				break;
 			case 3:
-				rect.x += 102;
+				rect.x = 102;
 				break;
 			case 4:
-				rect.x += 126;
+				rect.x = 126;
 				break;
 			case 5:
-				rect.x += 150;
+				rect.x = 150;
 				break;
 			case 6:
-				rect.x += 175;
+				rect.x = 175;
 				break;
 		}
 		rect.w = images[IMG_BIGCOINRED]->w;
 		rect.h = images[IMG_BIGCOINRED]->h;
 		if (j->turno % 2 == 0) { /* El que empieza siempre es rojo */
-			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, surface, &rect);
 		} else {
-			SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, surface, &rect);
 		}
 	}
 	
@@ -699,37 +687,37 @@ void juego_draw (Juego *j, SDL_Surface *screen) {
 			case 1:
 				rect.w = images[IMG_WIN_1]->w;
 				rect.h = images[IMG_WIN_1]->h;
-				rect.x = j->ventana.x + 28 + (j->win_col * 24);
-				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				rect.x = 28 + (j->win_col * 24);
+				rect.y = 65 + ((5 - j->win_fila) * 24);
 				
-				SDL_BlitSurface (images[IMG_WIN_1], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_WIN_1], NULL, surface, &rect);
 				
 				break;
 			case 3:
 				rect.w = images[IMG_WIN_3]->w;
 				rect.h = images[IMG_WIN_3]->h;
-				rect.x = j->ventana.x + 28 + (j->win_col * 24);
-				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				rect.x = 28 + (j->win_col * 24);
+				rect.y = 65 + ((5 - j->win_fila) * 24);
 				
-				SDL_BlitSurface (images[IMG_WIN_3], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_WIN_3], NULL, surface, &rect);
 				break;
 			case 2:
 				/* Estas diagonales apuntan a la esquina inferior izquierda */
 				rect.w = images[IMG_WIN_2]->w;
 				rect.h = images[IMG_WIN_2]->h;
-				rect.x = j->ventana.x + 28 + (j->win_col * 24);
-				rect.y = j->ventana.y + 65 + ((5 - j->win_fila - 3) * 24);
+				rect.x = 28 + (j->win_col * 24);
+				rect.y = 65 + ((5 - j->win_fila - 3) * 24);
 				
-				SDL_BlitSurface (images[IMG_WIN_2], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_WIN_2], NULL, surface, &rect);
 				break;
 			case 4:
 				/* Esta digonal apunta a la esquina superior izquierda */
 				rect.w = images[IMG_WIN_4]->w;
 				rect.h = images[IMG_WIN_4]->h;
-				rect.x = j->ventana.x + 28 + (j->win_col * 24);
-				rect.y = j->ventana.y + 65 + ((5 - j->win_fila) * 24);
+				rect.x = 28 + (j->win_col * 24);
+				rect.y = 65 + ((5 - j->win_fila) * 24);
 				
-				SDL_BlitSurface (images[IMG_WIN_4], NULL, screen, &rect);
+				SDL_BlitSurface (images[IMG_WIN_4], NULL, surface, &rect);
 				break;
 		}
 	}

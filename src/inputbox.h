@@ -21,7 +21,7 @@
 #ifndef __INPUTBOX_H__
 #define __INPUTBOX_H__
 
-#include "findfour.h"
+#include "ventana.h"
 
 #define INPUTBOX_CURSOR_RATE 12
 
@@ -30,7 +30,7 @@ typedef struct _InputBox InputBox;
 typedef void (*InputBoxFunc) (InputBox *v, const char *texto);
 
 struct _InputBox {
-	Ventana ventana;
+	Ventana *ventana;
 	
 	/* El botón de cierre */
 	int close_frame; /* ¿El refresh es necesario? */
@@ -39,11 +39,13 @@ struct _InputBox {
 	
 	int send_frame;
 	
+	int h, w;
 	int box_y;
 	InputBoxFunc callback;
 	InputBoxFunc close_callback;
 	SDL_Surface *text_s;
 	SDL_Surface *text_ask;
+	Uint32 color_azul;
 	
 	int cursor_vel;
 };

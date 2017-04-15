@@ -27,6 +27,7 @@
 #include "findfour.h"
 #include "message.h"
 #include "draw-text.h"
+#include "ventana.h"
 
 struct _Message {
 	char msg[1024];
@@ -88,7 +89,7 @@ void message_add (int tipo, const char *texto_boton, const char *cadena, ...) {
 		new->button_text_image = NULL;
 	}
 	
-	full_stop_drag();
+	window_cancel_draging ();
 }
 
 void message_display (SDL_Surface *screen) {

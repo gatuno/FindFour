@@ -64,6 +64,7 @@
 #include "stun.h"
 #include "message.h"
 #include "resolv.h"
+#include "ventana.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -537,38 +538,6 @@ int findfour_get_socket4 (void) {
 }
 #endif
 
-/* TODO: Función que ya debería estar obsoleta */
-void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
-	int n;
-	struct addrinfo hints, *res;
-	char buffer_port[10];
-	
-	memset (&hints, 0, sizeof (hints));
-	hints.ai_flags = AI_PASSIVE;
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	
-	sprintf (buffer_port, "%i", puerto);
-	
-	/* Antes de intentar la conexión, hacer la resolución de nombres */
-	n = getaddrinfo (ip, buffer_port, &hints, &res);
-	
-	if (n < 0 || res == NULL) {
-		/* Lanzar mensaje de error */
-		eliminar_juego (juego);
-		return;
-	}
-	
-	/* Tomar y copiar el primer resultado */
-	memcpy (&juego->peer, res->ai_addr, res->ai_addrlen);
-	juego->peer_socklen = res->ai_addrlen;
-	
-	/* Sortear el turno inicial */
-	juego->inicio = RANDOM(2);
-	
-	conectar_juego (juego, nick);
-}
-
 void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen) {
 	memcpy (&juego->peer, peer, peer_socklen);
 	juego->peer_socklen = peer_socklen;
@@ -991,55 +960,54 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 
 void check_for_retry (void) {
 	Uint32 now_time;
-	Juego *ventana, *next;
+	Juego *juego, *next;
 	
 	now_time = SDL_GetTicks();
-	ventana = (Juego *) get_first_window ();
+	juego = get_game_list ();
 	
-	while (ventana != NULL) {
-		/* Omitir esta ventana porque no es de tipo juego */
-		if (ventana->ventana.tipo != WINDOW_GAME) {
-			ventana = (Juego *) ventana->ventana.next;
-			continue;
-		}
-		if (ventana->retry >= 5) {
-			if (ventana->estado == NET_WAIT_CLOSING || ventana->estado == NET_SYN_SENT) {
+	while (juego != NULL) {
+		if (juego->retry >= 5) {
+			if (juego->estado == NET_WAIT_CLOSING || juego->estado == NET_SYN_SENT) {
 				/* Demasiados intentos */
 				/* Caso especial, enviamos un SYN y nunca llegó,
 				 * ni siquiera intentamos enviar el fin */
-				next = (Juego *) ventana->ventana.next;
-				eliminar_juego (ventana);
-				ventana = next;
+				next = juego->next;
+				eliminar_juego (juego);
+				juego = next;
 			} else {
 				/* Intentar enviar un último mensaje de FIN */
-				ventana->last_fin = NET_DISCONNECT_NETERROR;
-				ventana->retry = 0;
-				enviar_fin (ventana);
-				ventana->ventana.mostrar = FALSE;
+				juego->last_fin = NET_DISCONNECT_NETERROR;
+				juego->retry = 0;
+				enviar_fin (juego);
+				
+				/* Destruir la ventana de este juego, ya se está cerrando */
+				window_destroy (juego->ventana);
+				juego->ventana = NULL;
+				juego = juego->next;
 			}
 			continue;
 		}
-		if (now_time > ventana->last_response + NET_CONN_TIMER) {
-			//printf ("Reenviando por timer: %i\n", ventana->estado);
-			if (ventana->estado == NET_SYN_SENT) {
+		if (now_time > juego->last_response + NET_CONN_TIMER) {
+			//printf ("Reenviando por timer: %i\n", juego->estado);
+			if (juego->estado == NET_SYN_SENT) {
 				//printf ("Reenviando SYN inicial timer\n");
-				conectar_juego (ventana, nick_global);
-				ventana->retry++;
-			} else if (ventana->estado == NET_WAIT_ACK || ventana->estado == NET_WAIT_WINNER) {
+				conectar_juego (juego, nick_global);
+				juego->retry++;
+			} else if (juego->estado == NET_WAIT_ACK || juego->estado == NET_WAIT_WINNER) {
 				//printf ("Reenviando TRN por timer\n");
-				enviar_movimiento (ventana, ventana->turno - 1, ventana->last_col, ventana->last_fila);
-				ventana->retry++;
-			} else if (ventana->estado == NET_WAIT_CLOSING) {
+				enviar_movimiento (juego, juego->turno - 1, juego->last_col, juego->last_fila);
+				juego->retry++;
+			} else if (juego->estado == NET_WAIT_CLOSING) {
 				//printf ("Reenviando FIN por timer\n");
-				enviar_fin (ventana);
-				ventana->retry++;
-			} else if (ventana->estado == NET_READY && ventana->turno % 2 != ventana->inicio) {
+				enviar_fin (juego);
+				juego->retry++;
+			} else if (juego->estado == NET_READY && juego->turno % 2 != juego->inicio) {
 				//printf ("Enviando Keep Alive\n");
-				enviar_keep_alive (ventana);
-				ventana->retry++;
+				enviar_keep_alive (juego);
+				juego->retry++;
 			}
 		}
-		ventana = (Juego *) ventana->ventana.next;
+		juego = juego->next;
 	}
 	
 	/* Enviar el anuncio de juego multicast */
@@ -1071,7 +1039,7 @@ int do_read (void *buffer, size_t buffer_len, struct sockaddr *src_addr, socklen
 
 void process_netevent (void) {
 	char buffer [256];
-	Juego *ventana, *next;
+	Juego *juego, *next;
 	FFMessageNet message;
 	struct sockaddr_storage peer;
 	socklen_t peer_socklen;
@@ -1113,119 +1081,118 @@ void process_netevent (void) {
 		
 		/* Si es una conexión inicial (SYN), verificar que ésta no sea una repetición de algo que ya hayamos enviado */
 		if (message.type == TYPE_SYN) {
-			ventana = (Juego *) get_first_window ();
+			juego = get_game_list ();
 			
 			manejado = FALSE;
-			while (ventana != NULL) {
-				if (ventana->ventana.tipo != WINDOW_GAME) {
-					ventana = (Juego *) ventana->ventana.next;
-					continue;
-				}
-				
-				if (message.local == ventana->remote && sockaddr_cmp ((struct sockaddr *) &ventana->peer, (struct sockaddr *) &peer) == 0) {
+			while (juego != NULL) {
+				if (message.local == juego->remote && sockaddr_cmp ((struct sockaddr *) &juego->peer, (struct sockaddr *) &peer) == 0) {
 					/* Coincidencia por puerto remoto y dirección, es una repetición */
-					ventana->retry++;
-					enviar_res_syn (ventana, nick_global);
+					juego->retry++;
+					enviar_res_syn (juego, nick_global);
 					manejado = TRUE;
 					break;
 				}
-				ventana = (Juego *) ventana->ventana.next;
+				juego = (Juego *) juego->next;
 			}
 			
 			if (manejado) continue;
 			
 			/* Si no fué manejado es conexión nueva */
 			//printf ("Nueva conexión entrante\n");
-			ventana = crear_juego (FALSE);
+			juego = crear_juego (FALSE);
 		
 			/* Copiar la dirección IP del peer */
-			memcpy (&ventana->peer, &peer, peer_socklen);
-			ventana->peer_socklen = peer_socklen;
+			memcpy (&juego->peer, &peer, peer_socklen);
+			juego->peer_socklen = peer_socklen;
 			
 			/* Copiar el puerto remoto */
-			ventana->remote = message.local;
+			juego->remote = message.local;
 			
 			/* Copiar quién empieza */
 			if (message.initial == 0) {
-				ventana->inicio = 1;
+				juego->inicio = 1;
 			} else if (message.initial == 255) {
-				ventana->inicio = 0;
+				juego->inicio = 0;
 			}
 			
-			recibir_nick (ventana, message.nick);
+			recibir_nick (juego, message.nick);
 			
-			enviar_res_syn (ventana, nick_global);
+			enviar_res_syn (juego, nick_global);
 			
-			ventana->estado = NET_READY;
+			juego->estado = NET_READY;
 			continue;
 		}
 		
 		/* Buscar el puerto local que coincide con el mensaje */
-		ventana = (Juego *) get_first_window ();
-		while (ventana != NULL) {
-			if (ventana->ventana.tipo != WINDOW_GAME || message.remote != ventana->local) {
-				ventana = (Juego *) ventana->ventana.next;
-				continue;
+		juego = get_game_list ();
+		while (juego != NULL) {
+			if (message.remote == juego->local) {
+				break;
+			}
+			juego = juego->next;
+		}
+		
+		if (juego == NULL) {
+			/* TODO: Ningún juego coincide con el puerto mencionado, enviar un paquete RESET */
+			continue;
+		}
+		
+		if (message.type == TYPE_FIN) {
+			if (message.fin == NET_USER_QUIT && juego->nick_remoto[0] != 0) {
+				message_add (MSG_NORMAL, "Ok", "%s ha cerrado la partida", juego->nick_remoto);
+			} else {
+				message_add (MSG_ERROR, "Ok", "La partida se ha cerrado\nErr: %i", message.fin);
+			}
+			enviar_fin_ack (juego);
+			
+			/* Eliminar este juego */
+			eliminar_juego (juego);
+		} else if (message.type == TYPE_KEEP_ALIVE) {
+			/* Keep alive en cualquier momento se responde con Keep Alive ACK */
+			enviar_keep_alive_ack (juego);
+		} else if ((message.type == TYPE_RES_SYN && juego->estado != NET_SYN_SENT) ||
+		    (message.type == TYPE_TRN && (juego->estado != NET_READY && juego->estado != NET_WAIT_ACK)) ||
+		    (message.type == TYPE_TRN_ACK && juego->estado != NET_WAIT_ACK) ||
+		    (message.type == TYPE_TRN_ACK_GAME && juego->estado != NET_WAIT_WINNER) ||
+		    (message.type == TYPE_FIN_ACK && juego->estado != NET_WAIT_CLOSING) ||
+		    (message.type == TYPE_KEEP_ALIVE_ACK && juego->estado != NET_READY)) {
+			printf ("Paquete en el momento incorrecto\n");
+		} else if (message.type == TYPE_RES_SYN) {
+			/* Copiar el nick del otro jugador */
+			recibir_nick (juego, message.nick);
+			
+			/* Copiar el puerto remoto */
+			juego->remote = message.local;
+			
+			//printf ("Recibí RES SYN. Su puerto remoto es: %i\n", juego->remote);
+			juego->estado = NET_READY;
+		} else if (message.type == TYPE_TRN) {
+			/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
+			 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
+			if (juego->estado == NET_WAIT_ACK && message.turno == juego->turno) {
+				//printf ("Movimiento de turno cuando esperaba confirmación\n");
+				juego->estado = NET_READY;
 			}
 			
-			if (message.type == TYPE_FIN) {
-				if (message.fin == NET_USER_QUIT && ventana->nick_remoto[0] != 0) {
-					message_add (MSG_NORMAL, "Ok", "%s ha cerrado la partida", ventana->nick_remoto);
-				} else {
-					message_add (MSG_ERROR, "Ok", "La partida se ha cerrado\nErr: %i", message.fin);
-				}
-				enviar_fin_ack (ventana);
-				
-				/* Eliminar esta ventana */
-				eliminar_juego (ventana);
-			} else if (message.type == TYPE_KEEP_ALIVE) {
-				/* Keep alive en cualquier momento se responde con Keep Alive ACK */
-				enviar_keep_alive_ack (ventana);
-			} else if ((message.type == TYPE_RES_SYN && ventana->estado != NET_SYN_SENT) ||
-			    (message.type == TYPE_TRN && (ventana->estado != NET_READY && ventana->estado != NET_WAIT_ACK)) ||
-			    (message.type == TYPE_TRN_ACK && ventana->estado != NET_WAIT_ACK) ||
-			    (message.type == TYPE_TRN_ACK_GAME && ventana->estado != NET_WAIT_WINNER) ||
-			    (message.type == TYPE_FIN_ACK && ventana->estado != NET_WAIT_CLOSING) ||
-			    (message.type == TYPE_KEEP_ALIVE_ACK && ventana->estado != NET_READY)) {
-				printf ("Paquete en el momento incorrecto\n");
-			} else if (message.type == TYPE_RES_SYN) {
-				/* Copiar el nick del otro jugador */
-				recibir_nick (ventana, message.nick);
-				
-				/* Copiar el puerto remoto */
-				ventana->remote = message.local;
-				
-				//printf ("Recibí RES SYN. Su puerto remoto es: %i\n", ventana->remote);
-				ventana->estado = NET_READY;
-			} else if (message.type == TYPE_TRN) {
-				/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
-				 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
-				if (ventana->estado == NET_WAIT_ACK && message.turno == ventana->turno) {
-					//printf ("Movimiento de turno cuando esperaba confirmación\n");
-					ventana->estado = NET_READY;
-				}
-				
-				/* Recibir el movimiento */
-				recibir_movimiento (ventana, message.turno, message.col, message.fila);
-			} else if (message.type == TYPE_TRN_ACK) {
-				/* Verificar que el turno confirmado sea el local */
-				
-				if (message.turn_ack == ventana->turno) {
-					ventana->estado = NET_READY;
-				} else {
-					//printf ("FIXME: ???\n");
-				}
-			} else if (message.type == TYPE_TRN_ACK_GAME) {
-				/* Última confirmación de turno */
-				ventana->estado = NET_CLOSED;
-			} else if (message.type == TYPE_FIN_ACK) {
-				/* La última confirmación que necesitaba */
-				/* Eliminar esta ventana */
-				eliminar_juego (ventana);
-			} else if (message.type == TYPE_KEEP_ALIVE_ACK) {
-				ventana->retry = 0;
+			/* Recibir el movimiento */
+			recibir_movimiento (juego, message.turno, message.col, message.fila);
+		} else if (message.type == TYPE_TRN_ACK) {
+			/* Verificar que el turno confirmado sea el local */
+			
+			if (message.turn_ack == juego->turno) {
+				juego->estado = NET_READY;
+			} else {
+				//printf ("FIXME: ???\n");
 			}
-			break;
+		} else if (message.type == TYPE_TRN_ACK_GAME) {
+			/* Última confirmación de turno */
+			juego->estado = NET_CLOSED;
+		} else if (message.type == TYPE_FIN_ACK) {
+			/* La última confirmación que necesitaba */
+			/* Eliminar este objeto juego */
+			eliminar_juego (juego);
+		} else if (message.type == TYPE_KEEP_ALIVE_ACK) {
+			juego->retry = 0;
 		}
 	} while (1);
 	

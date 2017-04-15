@@ -65,14 +65,6 @@
 
 #define SWAP(a, b, t) ((t) = (a), (a) = (b), (b) = (t))
 
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-#ifndef TRUE
-#define TRUE !FALSE
-#endif
-
 const char *images_names[NUM_IMAGES] = {
 	"images/ventana.png",
 	"images/tablero.png",
@@ -161,31 +153,13 @@ SDL_Surface * nick_image_blue = NULL;
 int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
 
-static Ventana *primero, *ultimo, *drag, *connect_window;
-static int drag_x, drag_y;
+static InputBox *connect_window;
 
 int server_port;
 char nick_global[NICK_SIZE];
 static int nick_default;
 
 TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
-
-/* Funciones para el manejo de ventanas */
-Ventana *get_first_window (void) {
-	return primero;
-}
-
-Ventana *get_last_window (void) {
-	return ultimo;
-}
-
-void set_first_window (Ventana *v) {
-	primero = v;
-}
-
-void set_last_window (Ventana *v) {
-	ultimo = v;
-}
 
 void render_nick (void) {
 	SDL_Color blanco, negro;
@@ -257,9 +231,11 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	
 	if (strcmp (texto, "") == 0) {
 		/* Texto vacio, ignorar */
-		/* Eliminar esta ventana de texto */
-		eliminar_inputbox (ib);
-		connect_window = NULL;
+		if (ib != NULL) {
+			/* Eliminar esta ventana de texto */
+			eliminar_inputbox (ib);
+			connect_window = NULL;
+		}
 		return;
 	}
 	hostname = strdup (texto);
@@ -277,13 +253,29 @@ void nueva_conexion (InputBox *ib, const char *texto) {
 	
 	free (hostname);
 	
-	/* Eliminar esta ventana de texto */
-	eliminar_inputbox (ib);
-	connect_window = NULL;
+	if (ib != NULL) {
+		/* Eliminar esta ventana de texto */
+		eliminar_inputbox (ib);
+		connect_window = NULL;
+	}
 }
 
 void cancelar_conexion (InputBox *ib, const char *texto) {
 	connect_window = NULL;
+}
+
+void findfour_default_keyboard_handler (SDL_KeyboardEvent *key) {
+	if (key->keysym.sym == SDLK_F5) {
+		if (connect_window != NULL) {
+			/* Levantar la ventana de conexión al frente */
+			window_raise (connect_window->ventana);
+		} else {
+			/* Crear un input box para conectar */
+			connect_window = crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "", cancelar_conexion);
+		}
+	} else if (key->keysym.sym == SDLK_F8) {
+		show_chat ();
+	}
 }
 
 int main (int argc, char *argv[]) {
@@ -328,16 +320,11 @@ int game_loop (void) {
 	int g, h;
 	int start = 0;
 	int x, y;
-	int manejado;
 	
-	primero = NULL;
-	ultimo = NULL;
 	Ventana *ventana, *next;
 	Juego *j;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
-	
-	drag = NULL;
 	
 	if (findfour_netinit (server_port) < 0) {
 		fprintf (stderr, "Falló al inicializar la red\n");
@@ -360,199 +347,26 @@ int game_loop (void) {
 		process_netevent ();
 		
 		while (SDL_PollEvent(&event) > 0) {
-			switch (event.type) {
-				case SDL_KEYDOWN:
-					/* Encontrar la primer ventana no oculta para enviarle el evento */
-					manejado = FALSE;
-					ventana = primero;
-					
-					while (ventana != NULL && ventana->mostrar != TRUE) ventana = ventana->next;
-					
-					if (list_msg != NULL) ventana = NULL; /* No hay eventos de teclado cuando hay un mensaje en pantalla */
-					
-					if (ventana != NULL) {
-						/* Revisar si le interesa nuestro evento */
-						if (ventana->key_down != NULL) {
-							manejado = ventana->key_down (ventana, &event.key);
-						}
-					}
-					
-					/* Si el evento aún no ha sido manejado por alguna ventana, es de nuestro interés */
-					if (!manejado) {
-						if (event.key.keysym.sym == SDLK_F5) {
-							if (connect_window != NULL) {
-								/* Levantar la ventana de conexión al frente */
-								if (connect_window != primero) {
-									/* Desligar completamente */
-									if (connect_window->prev != NULL) {
-										connect_window->prev->next = connect_window->next;
-									} else {
-										primero = connect_window->next;
-									}
-								
-									if (connect_window->next != NULL) {
-										connect_window->next->prev = connect_window->prev;
-									} else {
-										ultimo = connect_window->prev;
-									}
-								
-									/* Levantar la ventana a primer plano */
-									connect_window->next = primero;
-									primero->prev = connect_window;
-									connect_window->prev = NULL;
-									primero = connect_window;
-								}
-							} else {
-								/* Crear un input box para conectar */
-								connect_window = (Ventana *) crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "", cancelar_conexion);
-							}
-						} else if (event.key.keysym.sym == SDLK_F8) {
-							show_chat ();
-						}
-					}
-					break;
-				case SDL_MOUSEBUTTONDOWN:
-					/* Primero, analizar si el evento cae dentro de alguna ventana */
-					
-					if (event.button.button != SDL_BUTTON_LEFT) break;
-					map = NULL;
-					manejado = FALSE;
-					if (list_msg != NULL) {
-						message_mouse_down (event.button.x, event.button.y, &map);
-						manejado = TRUE;
-					}
-					x = event.button.x;
-					y = event.button.y;
-					
-					for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
-						/* No hay eventos para ventanas que se están cerrando */
-						if (!ventana->mostrar) continue;
-						
-						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-							/* Pasarlo al manejador de la ventana */
-							if (ventana->mouse_down != NULL) {
-								manejado = ventana->mouse_down (ventana, x - ventana->x, y - ventana->y, &map);
-							}
-							
-							if (manejado && primero != ventana) {
-								/* Si el evento cayó dentro de esta ventana, levantar la ventana */
-								
-								/* Desligar completamente */
-								if (ventana->prev != NULL) {
-									ventana->prev->next = ventana->next;
-								} else {
-									primero = ventana->next;
-								}
-								
-								if (ventana->next != NULL) {
-									ventana->next->prev = ventana->prev;
-								} else {
-									ultimo = ventana->prev;
-								}
-								
-								/* Levantar la ventana a primer plano */
-								ventana->next = primero;
-								primero->prev = ventana;
-								ventana->prev = NULL;
-								primero = ventana;
-							}
-						}
-					}
-					
-					cp_button_down (map);
-					break;
-				case SDL_MOUSEMOTION:
-					map = NULL; /* Para los botones de cierre */
-					if (drag != NULL) {
-						/* Mover la ventana a las coordenadas del mouse - los offsets */
-						drag->x = event.motion.x - drag_x;
-						drag->y = event.motion.y - drag_y;
-					} else {
-						/* En caso contrario, buscar por un evento de ficha de turno */
-						manejado = FALSE;
-						
-						if (list_msg != NULL) {
-							message_mouse_motion (event.motion.x, event.motion.y, &map);
-							manejado = TRUE;
-						}
-						x = event.motion.x;
-						y = event.motion.y;
-						for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
-							/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-							if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-								if (ventana->mouse_motion != NULL) {
-									manejado = ventana->mouse_motion (ventana, x - ventana->x, y - ventana->y, &map);
-								}
-							}
-						}
-						
-						/* Recorrer las ventanas restantes y mandarles un evento mouse motion nulo */
-						while (ventana != NULL) {
-							if (ventana->mouse_motion != NULL) {
-								int *t;
-								ventana->mouse_motion (ventana, -1, -1, &t);
-							}
-							
-							ventana = ventana->next;
-						}
-						if (!manejado) { /* A ver si el fondo quiere manejar este evento */
-							background_mouse_motion (x, y);
-						}
-					}
-					
-					cp_button_motion (map);
-					break;
-				case SDL_MOUSEBUTTONUP:
-					if (event.button.button != SDL_BUTTON_LEFT) break;
-					drag = NULL;
-					manejado = FALSE;
-					map = NULL;
-					x = event.button.x;
-					y = event.button.y;
-					
-					if (list_msg != NULL) {
-						message_mouse_up (event.button.x, event.button.y, &map);
-						manejado = TRUE;
-					}
-					
-					ventana = primero;
-					while (ventana != NULL && manejado == FALSE) {
-						next = ventana->next;
-						/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-						if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
-							if (ventana->mouse_up != NULL) {
-								manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y, &map);
-							}
-						}
-						ventana = next;
-					}
-					
-					if (map == NULL) {
-						cp_button_up (NULL);
-					}
-					break;
-				case SDL_QUIT:
-					/* Vamos a cerrar la aplicación */
-					done = GAME_QUIT;
-					break;
+			if (event.type == SDL_QUIT) {
+				/* Vamos a cerrar la aplicación */
+				done = GAME_QUIT;
+				break;
+			} else if (event.type == SDL_MOUSEBUTTONDOWN ||
+			           event.type == SDL_MOUSEMOTION ||
+			           event.type == SDL_KEYDOWN ||
+			           event.type == SDL_MOUSEBUTTONUP) {
+				window_manager_event (event);
 			}
 		}
 		
-		draw_background (screen);
-		
 		//printf ("Dibujar: \n");
-		for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
-			if (!ventana->mostrar) continue;
-			
-			ventana->draw (ventana, screen);
-		}
+		window_manager_draw (screen);
 		
-		/* Dibujar los mensajes en pantalla */
+		/* Dibujar los mensajes en pantalla
 		if (list_msg != NULL) {
 			drawfuzz (0, 0, 760, 480);
 			message_display (screen);
-		}
+		}*/
 		
 		SDL_Flip (screen);
 		
@@ -562,36 +376,21 @@ int game_loop (void) {
 	} while (!done);
 	SDL_EnableUNICODE (0);
 	
-	for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
-		if (ventana->tipo != WINDOW_GAME) continue;
-		
-		j = (Juego *) ventana;
+	/* Recorrer los juegos */
+	j = get_game_list ();
+	while (j != NULL) {
 		if (j->estado != NET_CLOSED && j->estado != NET_WAIT_CLOSING) {
 			j->last_fin = NET_USER_QUIT;
 			j->retry = 0;
 			enviar_fin (j);
 		}
+		
+		j = j->next;
 	}
 	
 	findfour_netclose ();
 	
 	return done;
-}
-
-void start_drag (Ventana *v, int offset_x, int offset_y) {
-	/* Cuando una ventana determina que se va a mover, guardamos su offset para un arrastre perfecto */
-	drag_x = offset_x;
-	drag_y = offset_y;
-	
-	drag = v;
-}
-
-void stop_drag (Ventana *v) {
-	if (drag == v) drag = NULL;
-}
-
-void full_stop_drag (void) {
-	drag = NULL;
 }
 
 void drawfuzz (int x, int y, int w, int h) {

@@ -40,13 +40,13 @@
 #include "cp-button.h"
 #include "netplay.h"
 #include "juego.h"
+#include "ventana.h"
 
-int chat_mouse_down (Chat *j, int x, int y, int **button_map);
-int chat_mouse_motion (Chat *j, int x, int y, int **button_map);
-int chat_mouse_up (Chat *j, int x, int y, int **button_map);
-void chat_draw (Chat *j, SDL_Surface *screen);
+int chat_mouse_down (Ventana *v, int x, int y, int **button_map);
+int chat_mouse_motion (Ventana *v, int x, int y, int **button_map);
+int chat_mouse_up (Ventana *v, int x, int y, int **button_map);
+void chat_full_draw (Chat *c);
 
-Uint32 azul1 = 0;
 static Chat *static_chat = NULL;
 
 void inicializar_chat (void) {
@@ -56,20 +56,9 @@ void inicializar_chat (void) {
 	
 	c = (Chat *) malloc (sizeof (Chat));
 	
-	c->ventana.w = 232; /* FIXME: Arreglar esto */
-	c->ventana.h = 324;
-	c->ventana.x = 528;
-	c->ventana.y = 78;
-	
-	c->ventana.tipo = WINDOW_CHAT;
-	c->ventana.mostrar = TRUE;
-	
-	c->ventana.mouse_down = (FindWindowMouseFunc) chat_mouse_down;
-	c->ventana.mouse_motion = (FindWindowMouseFunc) chat_mouse_motion;
-	c->ventana.mouse_up = (FindWindowMouseFunc) chat_mouse_up;
-	c->ventana.draw = (FindWindowDraw) chat_draw;
-	c->ventana.key_down = NULL;
-	c->ventana.key_up = NULL;
+	c->ventana = window_create (232, 324, FALSE);
+	window_set_data (c->ventana, c);
+	window_register_mouse_events (c->ventana, chat_mouse_down, chat_mouse_motion, chat_mouse_up);
 	
 	c->close_frame = IMG_BUTTON_CLOSE_UP;
 	c->up_frame = IMG_BUTTON_ARROW_1_UP;
@@ -97,27 +86,20 @@ void inicializar_chat (void) {
 	c->list_display = CHAT_LIST_MCAST;
 	c->list_offset = 0;
 	
-	c->ventana.prev = NULL;
-	c->ventana.next = get_first_window ();
+	c->azul1 = SDL_MapRGB (window_get_surface (c->ventana)->format, 0, 0x52, 0x9B);
 	
-	if (get_first_window () == NULL) {
-		set_first_window ((Ventana *) c);
-		set_last_window ((Ventana *) c);
-	} else {
-		get_first_window ()->prev = (Ventana *) c;
-		set_first_window ((Ventana *) c);
-	}
+	chat_full_draw (c);
 	
 	static_chat = c;
 }
 
-int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
+int chat_mouse_down (Ventana *v, int x, int y, int **button_map) {
 	int g;
-	if (c->ventana.mostrar == FALSE) return FALSE;
+	Chat *c = (Chat *) window_get_data (v);
 	
 	if (x >= 64 && x < 168 && y < 22) {
 		/* Click por el agarre */
-		start_drag ((Ventana *) c, x, y);
+		window_start_drag (v, x, y);
 		return TRUE;
 	}
 	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
@@ -157,9 +139,9 @@ int chat_mouse_down (Chat *c, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
+int chat_mouse_motion (Ventana *v, int x, int y, int **button_map) {
 	int g;
-	if (c->ventana.mostrar == FALSE) return FALSE;
+	Chat *c = (Chat *) window_get_data (v);
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
@@ -197,18 +179,18 @@ int chat_mouse_motion (Chat *c, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
+int chat_mouse_up (Ventana *v, int x, int y, int **button_map) {
 	int g, h;
 	BuddyMCast *buddy;
 	RecentPlay *recent;
+	Chat *c = (Chat *) window_get_data (v);
 	Juego *j;
-	if (c->ventana.mostrar == FALSE) return FALSE;
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
 		*button_map = &(c->close_frame);
 		if (cp_button_up (*button_map)) {
-			c->ventana.mostrar = FALSE;
+			window_hide (v);
 		}
 		return TRUE;
 	}
@@ -283,14 +265,7 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 						g++;
 					}
 					
-					char *hostname = strdup (recent->buffer);
-					int puerto;
-					
-					analizador_hostname_puerto (recent->buffer, hostname, &puerto);
-					j = crear_juego (TRUE);
-		
-					conectar_con (j, nick_global, hostname, puerto);
-					free (hostname);
+					nueva_conexion (NULL, recent->buffer);
 				}
 				
 				/* Revisar otras listas */
@@ -304,103 +279,96 @@ int chat_mouse_up (Chat *c, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-void chat_draw (Chat *c, SDL_Surface *screen) {
+void chat_full_draw (Chat *c) {
 	SDL_Rect rect, rect2;
 	int g, h;
 	BuddyMCast *buddy;
 	RecentPlay *recent;
+	SDL_Surface *surface = window_get_surface (c->ventana);
 	
-	if (azul1 == 0) {
-		azul1 = SDL_MapRGB (screen->format, 0, 0x52, 0x9B);
-	}
-	
-	rect.x = c->ventana.x;
-	rect.y = c->ventana.y;
-	rect.w = c->ventana.w;
-	rect.h = c->ventana.h;
-	
-	SDL_BlitSurface (images[IMG_WINDOW_CHAT], NULL, screen, &rect);
+	SDL_SetAlpha (images[IMG_WINDOW_CHAT], 0, 0);
+	SDL_BlitSurface (images[IMG_WINDOW_CHAT], NULL, surface, NULL);
 	
 	/* Dibujar el botón de cierre */
-	rect.x = c->ventana.x + 190;
-	rect.y = c->ventana.y + 30;
+	rect.x = 190;
+	rect.y = 30;
 	rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
 	rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
 	
-	SDL_BlitSurface (images[c->close_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[c->close_frame], NULL, surface, &rect);
 	
 	/* Dibujar el color azul de la barra de desplazamiento */
-	rect.x = c->ventana.x + 191;
-	rect.y = c->ventana.y + 73;
+	rect.x = 191;
+	rect.y = 73;
 	rect.w = 26;
 	rect.h = 188;
 	
-	SDL_FillRect (screen, &rect, azul1);
+	SDL_FillRect (surface, &rect, c->azul1);
 	
 	/* Botón hacia arriba */
-	rect.x = c->ventana.x + 190;
-	rect.y = c->ventana.y + 61;
+	rect.x = 190;
+	rect.y = 61;
 	rect.w = images[IMG_BUTTON_ARROW_1_UP]->w;
 	rect.h = images[IMG_BUTTON_ARROW_1_UP]->h;
 	
-	SDL_BlitSurface (images[c->up_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[c->up_frame], NULL, surface, &rect);
 	
 	/* Botón hacia abajo */
-	rect.x = c->ventana.x + 190;
-	rect.y = c->ventana.y + 245;
+	rect.x = 190;
+	rect.y = 245;
 	rect.w = images[IMG_BUTTON_ARROW_2_UP]->w;
 	rect.h = images[IMG_BUTTON_ARROW_2_UP]->h;
 	
-	SDL_BlitSurface (images[c->down_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[c->down_frame], NULL, surface, &rect);
 	
 	/* Broadcast list */
-	rect.x = c->ventana.x + 102;
-	rect.y = c->ventana.y + 275;
+	rect.x = 102;
+	rect.y = 275;
 	rect.w = images[IMG_BUTTON_LIST_UP]->w;
 	rect.h = images[IMG_BUTTON_LIST_UP]->h;
 	
-	SDL_BlitSurface (images[c->broadcast_list_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[c->broadcast_list_frame], NULL, surface, &rect);
 	
-	rect.x = c->ventana.x + 109;
-	rect.y = c->ventana.y + 281;
+	rect.x = 109;
+	rect.y = 281;
 	rect.w = images[IMG_LIST_MINI]->w;
 	rect.h = images[IMG_LIST_MINI]->h;
 	
-	SDL_BlitSurface (images[IMG_LIST_MINI], NULL, screen, &rect);
+	SDL_BlitSurface (images[IMG_LIST_MINI], NULL, surface, &rect);
 	
 	/* Recent list */
-	rect.x = c->ventana.x + 134;
-	rect.y = c->ventana.y + 275;
+	rect.x = 134;
+	rect.y = 275;
 	rect.w = images[IMG_BUTTON_LIST_UP]->w;
 	rect.h = images[IMG_BUTTON_LIST_UP]->h;
 	
-	SDL_BlitSurface (images[c->recent_list_frame], NULL, screen, &rect);
+	SDL_BlitSurface (images[c->recent_list_frame], NULL, surface, &rect);
 	
-	rect.x = c->ventana.x + 141;
-	rect.y = c->ventana.y + 281;
+	rect.x = 141;
+	rect.y = 281;
 	rect.w = images[IMG_LIST_MINI]->w;
 	rect.h = images[IMG_LIST_MINI]->h;
 	
-	SDL_BlitSurface (images[IMG_LIST_RECENT_MINI], NULL, screen, &rect);
+	SDL_BlitSurface (images[IMG_LIST_RECENT_MINI], NULL, surface, &rect);
 	
 	/* Los 8 buddys */
 	for (g = 0; g < 8; g++) {
-		rect.x = c->ventana.x + 18;
-		rect.y = c->ventana.y + 65 + (g * 26);
+		rect.x = 18;
+		rect.y = 65 + (g * 26);
 		rect.w = images[IMG_SHADOW_UP]->w;
 		rect.h = images[IMG_SHADOW_UP]->h;
 		
-		SDL_BlitSurface (images[c->buddys[g]], NULL, screen, &rect);
+		SDL_BlitSurface (images[c->buddys[g]], NULL, surface, &rect);
 	}
 	
 	/* Desplegar la lista correspondiente */
 	if (c->list_display == CHAT_LIST_MCAST) {
-		rect.x = c->ventana.x + (images[IMG_WINDOW_CHAT]->w - c->mcast_text->w) / 2;
-		rect.y = c->ventana.y + 36;
+		rect.x = (images[IMG_WINDOW_CHAT]->w - c->mcast_text->w) / 2;
+		rect.y = 36;
 		rect.w = c->mcast_text->w;
 		rect.h = c->mcast_text->h;
 		
-		SDL_BlitSurface (c->mcast_text, NULL, screen, &rect);
+		SDL_BlitSurface (c->mcast_text, NULL, surface, &rect);
 		
 		buddy = c->buddy_mcast;
 		
@@ -409,33 +377,33 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 			buddy = buddy->next;
 			g++;
 		}
-		h = c->ventana.y + 65;
+		h = 65;
 		g = 0;
 		while (g < 8 && buddy != NULL) {
-			rect.x = c->ventana.x + 26;
+			rect.x = 26;
 			rect.y = h + 3;
 			rect.w = images[IMG_LIST_BIG]->w;
 			rect.h = images[IMG_LIST_BIG]->h;
 			
-			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, surface, &rect);
 			
-			rect.x = c->ventana.x + 46;
+			rect.x = 46;
 			rect.y = h + 5;
 			rect.w = buddy->nick_chat->w;
 			rect.h = buddy->nick_chat->h;
-			SDL_BlitSurface (buddy->nick_chat, NULL, screen, &rect);
+			SDL_BlitSurface (buddy->nick_chat, NULL, surface, &rect);
 			
 			h = h + 26;
 			g++;
 			buddy = buddy->next;
 		}
 	} else if (c->list_display == CHAT_LIST_RECENT) {
-		rect.x = c->ventana.x + (images[IMG_WINDOW_CHAT]->w - c->recent_text->w) / 2;
-		rect.y = c->ventana.y + 36;
+		rect.x = (images[IMG_WINDOW_CHAT]->w - c->recent_text->w) / 2;
+		rect.y = 36;
 		rect.w = c->mcast_text->w;
 		rect.h = c->mcast_text->h;
 		
-		SDL_BlitSurface (c->recent_text, NULL, screen, &rect);
+		SDL_BlitSurface (c->recent_text, NULL, surface, &rect);
 		
 		recent = c->buddy_recent;
 		
@@ -444,35 +412,36 @@ void chat_draw (Chat *c, SDL_Surface *screen) {
 			recent = recent->next;
 			g++;
 		}
-		h = c->ventana.y + 65;
+		h = 65;
 		g = 0;
 		while (g < 8 && recent != NULL) {
-			rect.x = c->ventana.x + 26;
+			rect.x = 26;
 			rect.y = h + 3;
 			rect.w = images[IMG_LIST_BIG]->w;
 			rect.h = images[IMG_LIST_BIG]->h;
 			
-			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, screen, &rect);
+			SDL_BlitSurface (images[IMG_LIST_BIG], NULL, surface, &rect);
 			
 			rect2.x = rect2.y = 0;
 			rect2.h = recent->text->h;
 			rect2.w = (recent->text->w > 142 ? 142 : recent->text->w);
 			
-			rect.x = c->ventana.x + 46;
+			rect.x = 46;
 			rect.y = h + 5;
 			rect.w = (recent->text->w > 142 ? 142 : recent->text->w);
 			rect.h = recent->text->h;
-			SDL_BlitSurface (recent->text, &rect2, screen, &rect);
+			SDL_BlitSurface (recent->text, &rect2, surface, &rect);
 			
 			h = h + 26;
 			g++;
 			recent = recent->next;
 		}
 	}
+	window_want_redraw (c->ventana);
 }
 
 void show_chat (void) {
-	static_chat->ventana.mostrar = TRUE;
+	window_show (static_chat->ventana);
 }
 
 void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen_t tamsock) {
