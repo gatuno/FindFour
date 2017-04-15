@@ -54,6 +54,11 @@
 #include "netplay.h"
 #include "stun.h"
 #include "message.h"
+#include "resolv.h"
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #define MULTICAST_IPV4_GROUP "224.0.0.133"
 #define MULTICAST_IPV6_GROUP "FF02::224:0:0:133"
@@ -162,9 +167,6 @@ int findfour_try_netinit4 (int puerto) {
 	g = 1;
 	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
 	
-	/* Intentar el binding request */
-	try_stun_binding ("stun.ekiga.net", fd);
-	
 	return fd;
 }
 
@@ -262,6 +264,9 @@ int findfour_netinit (int puerto) {
 		return -1;
 	}
 	
+	/* Intentar el binding request */
+	try_stun_binding ("stun.ekiga.net");
+	
 	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
@@ -278,6 +283,10 @@ void findfour_netclose (void) {
 	if (fd_socket6 >= 0) closesocket (fd_socket6);
 	
 	WSACleanup();
+}
+
+SOCKET findfour_get_socket4 (void) {
+	return fd_socket4;
 }
 #else
 
@@ -346,9 +355,6 @@ int findfour_try_netinit4 (int puerto) {
 	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_LOOP, &g, sizeof(g));
 	g = 1;
 	setsockopt (fd, IPPROTO_IP, IP_MULTICAST_TTL, &g, sizeof(g));
-	
-	/* Intentar el binding request */
-	try_stun_binding ("stun.ekiga.net", fd);
 	
 	return fd;
 }
@@ -439,6 +445,9 @@ int findfour_netinit (int puerto) {
 		return -1;
 	}
 	
+	/* Intentar el binding request */
+	try_stun_binding ("stun.ekiga.net");
+	
 	enviar_broadcast_game (nick_global);
 	multicast_timer = SDL_GetTicks ();
 	
@@ -454,8 +463,13 @@ void findfour_netclose (void) {
 	if (fd_socket4 >= 0) close (fd_socket4);
 	if (fd_socket6 >= 0) close (fd_socket6);
 }
+
+int findfour_get_socket4 (void) {
+	return fd_socket4;
+}
 #endif
 
+/* TODO: Función que ya debería estar obsoleta */
 void conectar_con (Juego *juego, const char *nick, const char *ip, const int puerto) {
 	int n;
 	struct addrinfo hints, *res;
@@ -486,7 +500,6 @@ void conectar_con (Juego *juego, const char *nick, const char *ip, const int pue
 	
 	conectar_juego (juego, nick);
 }
-
 
 void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen) {
 	memcpy (&juego->peer, peer, peer_socklen);
@@ -979,6 +992,10 @@ void process_netevent (void) {
 	socklen_t peer_socklen;
 	int len;
 	int manejado;
+
+#ifdef HAVE_WORKING_FORK
+	pending_query ();
+#endif
 	
 	do {
 		peer_socklen = sizeof (peer);

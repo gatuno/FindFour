@@ -224,44 +224,20 @@ void parse_stun_message (const char *buffer, int buffer_len) {
 	}
 }
 
-void try_stun_binding (const char *server, int fd_socket) {
-	char host[520];
-	struct hostent *h;
-	int port;
-	char *sep;
-	char *port_part;
+void try_stun_binding_sockaddr (struct sockaddr_in *server) {
 	struct sockaddr_in stun_addr;
 	char buffer[512];
 	size_t len_msg;
 	StunMessage stun_msg;
 	
-	strncpy (host, server, 520);
-	host[519] = '\0';
+	int fd_socket;
 	
-	sep = strchr(host, ':');
-	/* Tratar de ver si tiene puerto */
-	if (sep == NULL) {
-		port = STUN_PORT;
-	} else {
-		port_part = sep + 1;
-		*sep = '\0';
-		
-		port = strtol (port_part, NULL, 10);
-		
-		if (port < 1 || port > 0xFFFF) port = STUN_PORT;
-	}
-		
-	h = gethostbyname (host);
+	fd_socket = findfour_get_socket4 ();
+	if (fd_socket < 0) return;
 	
-	if (h == NULL) {
-		perror ("Falló la conversión de nombres. STUN.");
-		return;
-	}
-	
-	stun_addr.sin_family = h->h_addrtype;
-	stun_addr.sin_port = htons (port);
-	
-	memcpy (&(stun_addr.sin_addr), h->h_addr, h->h_length);
+	stun_addr.sin_family = AF_INET;
+	stun_addr.sin_addr.s_addr = server->sin_addr.s_addr;
+	stun_addr.sin_port = server->sin_port;
 	
 	/* Enviar un same-port, same-address */
 	build_binding_request (&stun_msg, 0, 0, 0x01);
@@ -279,5 +255,33 @@ void try_stun_binding (const char *server, int fd_socket) {
 	sendto (fd_socket, buffer, len_msg, 0, (struct sockaddr *) &stun_addr, sizeof (stun_addr));
 	
 	/* Cuando llegue la respuesta, guardar la IP */
+}
+
+void late_stun_connect (const struct addrinfo *res) {
+	/* Localizar el primer resultado AF_INET*/
+	while (res != NULL) {
+		if (res->ai_addr->sa_family == AF_INET) {
+			try_stun_binding_sockaddr ((struct sockaddr_in *)res->ai_addr);
+			break;
+		}
+		res = res->ai_next;
+	}
+}
+
+void try_stun_binding (const char *server) {
+	const char *hostname;
+	int puerto;
+	int valido;
+	
+	hostname = strdup (server);
+	
+	valido = analizador_hostname_puerto (server, hostname, &puerto, STUN_PORT);
+	
+	if (valido) {
+		/* Ejecutar la resolución de nombres primero, conectar después */
+		do_query (hostname, puerto, late_stun_connect);
+	} else {
+		/* Mandar un mensaje de error */
+	}
 }
 

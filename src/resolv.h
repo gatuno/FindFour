@@ -32,6 +32,7 @@ typedef void (*ResolvCallback) (const struct addrinfo *res);
 void pending_query (void);
 void do_query (const char *hostname, int puerto, ResolvCallback callback);
 void init_resolver (void);
+int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto, int default_port);
 
 #endif /* __RESOLV_H__ */
 

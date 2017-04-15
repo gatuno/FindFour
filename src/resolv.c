@@ -43,6 +43,10 @@
 
 #include "resolv.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #define MAX_ADDR_RESPONSE_LEN 1048576
 
 #ifndef FALSE
@@ -77,7 +81,14 @@ static pid_t forked_child;
 static int child_in, child_out;
 static CallbackNode *resolv_list = NULL;
 
+static int use_non_fork_resolv = 0;
+
 void init_resolver (void) {
+#ifndef HAVE_WORKING_FORK
+	use_non_fork_resolv = 1;
+	
+	return;
+#else
 	pid_t child;
 	
 	int proc_in[2], proc_out[2];
@@ -103,7 +114,13 @@ void init_resolver (void) {
 	close (proc_out[1]);
 	
 	if (forked_child == -1) {
+		close (proc_in[1]);
+		close (proc_out[0]);
+		
+		use_non_fork_resolv = 1;
+		
 		fprintf (stderr, "Error al crear proceso para resolución de nombres\n");
+		forked_child = 0;
 		return;
 	}
 	
@@ -120,20 +137,11 @@ void init_resolver (void) {
 	flags = flags | O_NONBLOCK;
 	fcntl (child_out, F_SETFL, flags);
 #endif
+#endif
 }
 
-static void destroy_resolver (void) {
+static void cancel_requests (void) {
 	CallbackNode *node, *next;
-	
-	if (forked_child > 0) {
-		kill(forked_child, SIGKILL);
-	}
-	
-	forked_child = 0;
-	
-	close (child_in);
-	close (child_out);
-	
 	/* Cancelar todo lo pendiente */
 	node = resolv_list;
 	
@@ -147,6 +155,19 @@ static void destroy_resolver (void) {
 	}
 	
 	resolv_list = NULL;
+}
+
+static void destroy_resolver (void) {
+	if (forked_child > 0) {
+		kill(forked_child, SIGKILL);
+	}
+	
+	forked_child = 0;
+	
+	close (child_in);
+	close (child_out);
+	
+	cancel_requests ();
 }
 
 /* Funciones del proceso hijo */
@@ -229,11 +250,37 @@ static void resolver_run (int child_out, int child_in) {
 	close (child_out);
 	close (child_in);
 	
+	printf ("Child process exiting!\n");
 	_exit (0);
 }
 /* Fin de las funciones del proceso hijo */
 
-static int send_dns_request_to_child (const char *hostname, int puerto, ResolvCallback callback) {
+/* Resolución de nombres sin fork */
+void resolv_non_fork (const char *hostname, int puerto, ResolvCallback callback) {
+	struct addrinfo hints, *res;
+	char servname[20];
+	int rc;
+	
+	snprintf(servname, sizeof(servname), "%d", puerto);
+	memset(&hints, 0, sizeof(hints));
+	
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags |= AI_ADDRCONFIG;
+	
+	rc = getaddrinfo(hostname, servname, &hints, &res);
+	
+	if (rc < 0) {
+		callback (NULL);
+		
+		return;
+	}
+	
+	callback (res);
+	
+	freeaddrinfo (res);
+}
+
+static int send_dns_request_to_child (const char *hostname, int puerto) {
 	pid_t pid;
 	dns_params_t dns_params;
 	ssize_t rc;
@@ -241,13 +288,17 @@ static int send_dns_request_to_child (const char *hostname, int puerto, ResolvCa
 	pid = waitpid (forked_child, NULL, WNOHANG);
 	if (pid > 0) {
 		fprintf (stderr, "dns: DNS child %d no longer exists\n", forked_child);
+		forked_child = 0;
 		destroy_resolver ();
-		return FALSE;
 	} else if (pid < 0) {
 		fprintf (stderr, "dns: Wait for DNS child %d failed: %s\n",
 				forked_child, strerror (errno));
 		destroy_resolver ();
-		return FALSE;
+	}
+	
+	if (forked_child == 0) {
+		/* El proceso hijo murió por alguna extraña razón, intentar volverlo a lanzar */
+		init_resolver ();
 	}
 	
 	/* Copy the hostname and port into a single data structure */
@@ -277,7 +328,11 @@ void do_query (const char *hostname, int puerto, ResolvCallback callback) {
 	int res;
 	CallbackNode *node, *pos;
 	
-	res = send_dns_request_to_child (hostname, puerto, callback);
+	if (use_non_fork_resolv) {
+		resolv_non_fork (hostname, puerto, callback);
+		return;
+	}
+	res = send_dns_request_to_child (hostname, puerto);
 	
 	if (res == FALSE) {
 		callback (NULL);
@@ -323,8 +378,11 @@ void pending_query (void) {
 	struct sockaddr *addr = NULL;
 	size_t addrlen;
 	struct addrinfo *ip_list, *ip, *ip_next;
-	rc = read(child_out, &err, sizeof(err));
 	
+	/* Nada que vigilar */
+	if (resolv_list == NULL) return;
+	
+	rc = read(child_out, &err, sizeof(err));
 	if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
 		return;
 	} else if (rc < 0) {
@@ -337,7 +395,7 @@ void pending_query (void) {
 			fprintf (stderr, "Advertencia: Resolución no solicitada\n");
 			return;
 		}
-		fprintf (stderr, "Error resolving %s:\n%s", resolv_list->hostname, gai_strerror (err));
+		fprintf (stderr, "Error resolving %s:\n%s\n", resolv_list->hostname, gai_strerror (err));
 		
 		resolv_list->callback (NULL);
 		
@@ -369,7 +427,6 @@ void pending_query (void) {
 				break;
 			}
 		}
-		
 		/* Ejecutar la llamada */
 		resolv_list->callback (ip_list);
 		
@@ -381,3 +438,59 @@ void pending_query (void) {
 	}
 }
 
+int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto, int default_port) {
+	char *p, *port, *invalid;
+	int g;
+	
+	if (cadena[0] == 0) {
+		hostname[0] = 0;
+		return FALSE;
+	}
+	
+	*puerto = default_port;
+	
+	if (cadena[0] == '[') {
+		/* Es una ip literal, buscar por otro ] de cierre */
+		p = strchr (cadena, ']');
+		
+		if (p == NULL) {
+			/* Error, no hay cierre */
+			hostname[0] = 0;
+			return FALSE;
+		}
+		strncpy (hostname, &cadena[1], p - cadena - 1);
+		hostname [p - cadena - 1] = 0;
+		p++;
+		cadena = p;
+	} else {
+		/* Nombre de host directo */
+		port = strchr (cadena, ':');
+		
+		if (port == NULL) {
+			/* No hay puerto, sólo host directo */
+			strcpy (hostname, cadena);
+			
+			return TRUE;
+		} else {
+			/* Copiar hasta antes del ":" */
+			strncpy (hostname, cadena, port - cadena);
+			hostname [port - cadena] = 0;
+		}
+		cadena = port;
+	}
+	
+	/* Buscar por un posible ":" */
+	if (cadena[0] == ':') {
+		g = strtol (&cadena[1], &invalid, 10);
+		
+		if (invalid[0] != 0 || g > 65535) {
+			/* Caracteres sobrantes */
+			hostname[0] = 0;
+			return FALSE;
+		}
+		
+		*puerto = g;
+	}
+	
+	return TRUE;
+}
