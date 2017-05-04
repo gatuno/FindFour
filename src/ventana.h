@@ -27,11 +27,20 @@
 
 #include "findfour.h"
 
+enum {
+	BUTTON_NORMAL = 0,
+	BUTTON_OVER,
+	BUTTON_DOWN,
+	
+	BUTTON_FRAMES
+};
+
 typedef struct _Ventana Ventana;
 
-typedef int (*FindWindowMouseFunc)(Ventana *, int, int, int **);
+typedef int (*FindWindowMouseFunc)(Ventana *, int, int);
 typedef int (*FindWindowKeyFunc)(Ventana *, SDL_KeyboardEvent *);
-
+typedef void (*FindWindowButtonFrameChange)(Ventana *, int button, int frame);
+typedef void (*FindWindowButtonEvent)(Ventana *, int button);
 Ventana *window_create (int w, int h, int top_window);
 
 void window_set_data (Ventana *v, void *);
@@ -45,6 +54,12 @@ void window_show (Ventana *v);
 
 void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWindowMouseFunc motion, FindWindowMouseFunc up);
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up);
+
+void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event);
+
+void window_button_mouse_down (Ventana *v, int button);
+void window_button_mouse_motion (Ventana *v, int button);
+void window_button_mouse_up (Ventana *v, int button);
 
 void window_start_drag (Ventana *v, int offset_x, int offset_y);
 void window_cancel_draging (void);

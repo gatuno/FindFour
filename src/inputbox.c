@@ -31,13 +31,19 @@
 #include "cp-button.h"
 #include "ventana.h"
 
-int inputbox_mouse_down (Ventana *v, int x, int y, int **button_map);
-int inputbox_mouse_motion (Ventana *v, int x, int y, int **button_map);
-int inputbox_mouse_up (Ventana *v, int x, int y, int **button_map);
-void inputbox_draw (Ventana *v, SDL_Surface *surface);
+int inputbox_mouse_down (Ventana *v, int x, int y);
+int inputbox_mouse_motion (Ventana *v, int x, int y);
+int inputbox_mouse_up (Ventana *v, int x, int y);
 int inputbox_key_down (Ventana *v, SDL_KeyboardEvent *);
 
 static void draw_inputbox_textfield (InputBox *ib);
+
+enum {
+	INPUTBOX_BUTTON_CLOSE = 0,
+	INPUTBOX_BUTTON_SEND,
+	
+	INPUTBOX_NUM_BUTTONS
+};
 
 static full_inputbox_draw (InputBox *ib) {
 	SDL_Surface *surface;
@@ -332,6 +338,33 @@ static void draw_inputbox_close (InputBox *ib) {
 	window_want_redraw (ib->ventana);
 }
 
+/* Se dispara cuando un botón necesita ser re-dibujado */
+void inputbox_button_frame (Ventana *v, int button, int frame) {
+	InputBox *ib = (InputBox *) window_get_data (v);
+	if (button == INPUTBOX_BUTTON_CLOSE) {
+		ib->close_frame = IMG_BUTTON_CLOSE_UP + frame;
+		draw_inputbox_close (ib);
+	} else if (button == INPUTBOX_BUTTON_SEND) {
+		ib->send_frame = IMG_BUTTON_LIST_UP + frame;
+		draw_inputbox_textfield (ib);
+	}
+}
+
+/* Se dispara cuando ocurre un evento de botón en la ventana */
+void inputbox_button (Ventana *v, int button) {
+	InputBox *ib = (InputBox *) window_get_data (v);
+	if (button == INPUTBOX_BUTTON_CLOSE) {
+		if (ib->close_callback != NULL) {
+			ib->close_callback (ib, ib->buffer);
+		}
+		eliminar_inputbox (ib);
+	} else if (button == INPUTBOX_BUTTON_SEND) {
+		if (ib->callback != NULL) {
+			ib->callback (ib, ib->buffer);
+		}
+	}
+}
+
 InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, InputBoxFunc close_func) {
 	InputBox *ib;
 	SDL_Color blanco;
@@ -367,6 +400,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, 
 	
 	window_register_mouse_events (ib->ventana, inputbox_mouse_down, inputbox_mouse_motion, inputbox_mouse_up);
 	window_register_keyboard_events (ib->ventana, inputbox_key_down, NULL);
+	window_register_buttons (ib->ventana, INPUTBOX_NUM_BUTTONS, inputbox_button_frame, inputbox_button);
 	
 	/* Callbacks de la entrada */
 	ib->callback = func;
@@ -400,7 +434,7 @@ void eliminar_inputbox (InputBox *ib) {
 	free (ib);
 }
 
-int inputbox_mouse_down (Ventana *v, int x, int y, int **button_map) {
+int inputbox_mouse_down (Ventana *v, int x, int y) {
 	int p, q;
 	
 	InputBox *ib = (InputBox *) window_get_data (v);
@@ -412,13 +446,10 @@ int inputbox_mouse_down (Ventana *v, int x, int y, int **button_map) {
 		window_start_drag (v, x, y);
 		return TRUE;
 	} else if (x >= 22 + q && x < 50 + q && y >= ib->box_y && y < ib->box_y + 28) {
-		*button_map = &(ib->send_frame);
-		draw_inputbox_textfield (ib);
+		window_button_mouse_down (v, INPUTBOX_BUTTON_SEND);
 		return TRUE;
 	} else if (y >= 30 && y < 58 && x >= ib->w - 42 && x < ib->w - 14) {
-		// El click cae en el botón de cierre de la ventana
-		*button_map = &(ib->close_frame);
-		draw_inputbox_close (ib);
+		window_button_mouse_down (v, INPUTBOX_BUTTON_CLOSE);
 		return TRUE;
 	} else if (y >= 16) {
 		/* El evento cae dentro de la ventana */
@@ -428,7 +459,7 @@ int inputbox_mouse_down (Ventana *v, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int inputbox_mouse_motion (Ventana *v, int x, int y, int **button_map) {
+int inputbox_mouse_motion (Ventana *v, int x, int y) {
 	int p, q;
 	
 	InputBox *ib = (InputBox *) window_get_data (v);
@@ -437,14 +468,12 @@ int inputbox_mouse_motion (Ventana *v, int x, int y, int **button_map) {
 	q = ib->w - 68;
 	
 	if (y >= 30 && y < 58 && x >= ib->w - 42 && x < ib->w - 14) {
-		*button_map = &(ib->close_frame);
-		draw_inputbox_close (ib);
+		window_button_mouse_motion (v, INPUTBOX_BUTTON_CLOSE);
 		return TRUE;
 	}
 	
 	if (x >= 22 + q && x < 50 + q && y >= ib->box_y && y < ib->box_y + 28) {
-		*button_map = &(ib->send_frame);
-		draw_inputbox_textfield (ib);
+		window_button_mouse_motion (v, INPUTBOX_BUTTON_SEND);
 		return TRUE;
 	}
 	
@@ -456,7 +485,7 @@ int inputbox_mouse_motion (Ventana *v, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int inputbox_mouse_up (Ventana *v, int x, int y, int **button_map) {
+int inputbox_mouse_up (Ventana *v, int x, int y) {
 	int p, q;
 	
 	InputBox *ib = (InputBox *) window_get_data (v);
@@ -466,24 +495,12 @@ int inputbox_mouse_up (Ventana *v, int x, int y, int **button_map) {
 	q = ib->w - 68;
 	
 	if (y >= 30 && y < 58 && x >= ib->w - 42 && x < ib->w - 14) {
-		*button_map = &(ib->close_frame);
-		if (cp_button_up (*button_map)) {
-			if (ib->close_callback != NULL) {
-				ib->close_callback (ib, ib->buffer);
-			}
-			eliminar_inputbox (ib);
-		}
+		window_button_mouse_up (v, INPUTBOX_BUTTON_CLOSE);
 		return TRUE;
 	}
 	
 	if (x >= 22 + q && x < 50 + q && y >= ib->box_y && y < ib->box_y + 28) {
-		*button_map = &(ib->send_frame);
-		if (cp_button_up (*button_map)) {
-			if (ib->callback != NULL) {
-				ib->callback (ib, ib->buffer);
-			}
-		}
-		draw_inputbox_textfield (ib);
+		window_button_mouse_up (v, INPUTBOX_BUTTON_SEND);
 		return TRUE;
 	}
 	

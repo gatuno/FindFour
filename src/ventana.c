@@ -27,8 +27,6 @@
 #include "ventana.h"
 
 struct _Ventana {
-	int tipo;
-	
 	SDL_Surface *surface;
 	int needs_redraw;
 	
@@ -37,6 +35,10 @@ struct _Ventana {
 	int w, h;
 	
 	int mostrar;
+	
+	/* Para el nuevo motor de botones */
+	int button_start;
+	int *buttons_frame;
 	
 	void *data;
 	
@@ -47,9 +49,19 @@ struct _Ventana {
 	FindWindowKeyFunc key_down;
 	FindWindowKeyFunc key_up;
 	
+	/* Manejadores de los botones */
+	FindWindowButtonFrameChange button_frame_func;
+	FindWindowButtonEvent button_event_func;
+	
 	/* Para la lista ligada */
 	Ventana *prev, *next;
 };
+
+/* Para almacenar cuál botón está presionado y en cuál ventana */
+typedef struct {
+	int button;
+	Ventana *ventana;
+} CPButton;
 
 /* Controlan la posición inicial de las ventanas */
 static int start_x = 0, start_y = 0;
@@ -61,6 +73,10 @@ static Ventana *primero = NULL, *ultimo = NULL;
 static Ventana *drag = NULL;
 /* Para controlar el offset de arrastre */
 static int drag_x, drag_y;
+
+static int button_counter = 1;
+
+static CPButton old_map = {0, NULL}, last_map = {0, NULL}, for_process;
 
 Ventana *window_create (int w, int h, int top_window) {
 	Ventana *nueva;
@@ -125,6 +141,13 @@ Ventana *window_create (int w, int h, int top_window) {
 	nueva->key_down = nueva->key_up = NULL;
 	nueva->data = NULL;
 	
+	/* Información de los botones */
+	nueva->button_start = 0;
+	nueva->buttons_frame = NULL;
+	
+	nueva->button_frame_func = NULL;
+	nueva->button_event_func = NULL;
+	
 	return nueva;
 }
 
@@ -163,6 +186,111 @@ void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWi
 	v->key_up = up;
 }
 
+void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event) {
+	if (v->button_start != 0) {
+		printf ("Advertencia, la ventana ya tiene registrados botones, ignorando\n");
+		return;
+	}
+	
+	v->button_start = button_counter;
+	
+	button_counter += count;
+	
+	v->button_frame_func = frame;
+	v->button_event_func = event;
+	
+	v->buttons_frame = (int *) malloc (sizeof (int) * count);
+	memset (v->buttons_frame, 0, sizeof (int) * count);
+}
+
+void window_button_mouse_down (Ventana *v, int button) {
+	/* Guardar el botón para el procesamiento posterior */
+	if (v == NULL) return;
+	
+	for_process.button = button;
+	for_process.ventana = v;
+}
+
+void window_button_down_process (CPButton *p) {
+	last_map.button = p->button;
+	last_map.ventana = p->ventana;
+	
+	if (last_map.ventana != NULL) {
+		/* Disparar el evento de frame ++ */
+		last_map.ventana->buttons_frame[last_map.button]++;
+		/* Dispara redibujado del botón */
+		last_map.ventana->button_frame_func (last_map.ventana, last_map.button, last_map.ventana->buttons_frame[last_map.button]);
+	}
+}
+
+void window_button_mouse_motion (Ventana *v, int button) {
+	if (v == NULL) return;
+	
+	for_process.button = button;
+	for_process.ventana = v;
+}
+
+void window_button_motion_process (CPButton *p) {
+	/* Motor de botones */
+	if (old_map.ventana == NULL && p->ventana != NULL) {
+		if (last_map.ventana == NULL || (last_map.ventana == p->ventana && last_map.button == p->button)) {
+			p->ventana->buttons_frame[p->button]++;
+			p->ventana->button_frame_func (p->ventana, p->button, p->ventana->buttons_frame[p->button]);
+		}
+	} else if (old_map.ventana != NULL && p->ventana == NULL) {
+		if (last_map.ventana == NULL) {
+			old_map.ventana->buttons_frame[old_map.button]--;
+			
+			old_map.ventana->button_frame_func (old_map.ventana, old_map.button, old_map.ventana->buttons_frame[old_map.button]);
+		} else if (last_map.ventana == old_map.ventana && last_map.button == old_map.button) {
+			last_map.ventana->buttons_frame[last_map.button]--;
+			
+			last_map.ventana->button_frame_func (last_map.ventana, last_map.button, last_map.ventana->buttons_frame[last_map.button]);
+		}
+	} else if (old_map.ventana != p->ventana || old_map.button != p->button) {
+		if (last_map.ventana == NULL) {
+			p->ventana->buttons_frame[p->button]++;
+			p->ventana->button_frame_func (p->ventana, p->button, p->ventana->buttons_frame[p->button]);
+			if (old_map.ventana != NULL) {
+				old_map.ventana->buttons_frame[old_map.button]--;
+				old_map.ventana->button_frame_func (old_map.ventana, old_map.button, old_map.ventana->buttons_frame[old_map.button]);
+			}
+		} else if (last_map.ventana == old_map.ventana && last_map.button == old_map.button) {
+			old_map.ventana->buttons_frame[old_map.button]--;
+			old_map.ventana->button_frame_func (old_map.ventana, old_map.button, old_map.ventana->buttons_frame[old_map.button]);
+		} else if (last_map.ventana == p->ventana && last_map.button == p->button) {
+			p->ventana->buttons_frame[p->button]++;
+			p->ventana->button_frame_func (p->ventana, p->button, p->ventana->buttons_frame[p->button]);
+		}
+	}
+	old_map = *p;
+}
+
+void window_button_mouse_up (Ventana *v, int button) {
+	if (v == NULL) return;
+	
+	for_process.button = button;
+	for_process.ventana = v;
+}
+
+void window_button_up_process (CPButton *p) {
+	if (last_map.ventana != NULL) {
+		
+		last_map.ventana->buttons_frame[last_map.button]--;
+		last_map.ventana->button_frame_func (last_map.ventana, last_map.button, last_map.ventana->buttons_frame[last_map.button]);
+		if (last_map.ventana == p->ventana && last_map.button == p->button) {
+			/* Disparar el evento del botón */
+			p->ventana->button_event_func (p->ventana, p->button);
+		} else if (p->ventana != NULL) {
+			p->ventana->buttons_frame[p->button]++;
+			p->ventana->button_frame_func (p->ventana, p->button, p->ventana->buttons_frame[p->button]);
+		}
+		
+		last_map.ventana = NULL;
+		last_map.button = 0;
+	}
+}
+
 void window_start_drag (Ventana *v, int offset_x, int offset_y) {
 	/* Cuando una ventana determina que se va a mover, guardamos su offset para un arrastre perfecto */
 	drag_x = offset_x;
@@ -176,6 +304,17 @@ void window_cancel_draging (void) {
 }
 
 void window_destroy (Ventana *v) {
+	/* Si hay algún botón que apunte a esta ventana, eliminar la referencia */
+	if (last_map.ventana == v) {
+		last_map.ventana = NULL;
+		last_map.button = 0;
+	}
+	
+	if (old_map.ventana == v) {
+		old_map.ventana = NULL;
+		old_map.button = 0;
+	}
+	
 	/* Si esta ventana era la que se estaba arrastrando, detener el arrastre */
 	if (drag == v) drag = NULL;
 	
@@ -221,7 +360,6 @@ void window_manager_event (SDL_Event event) {
 	int manejado;
 	Ventana *ventana, *next;
 	int x, y;
-	int *map;
 	
 	switch (event.type) {
 		case SDL_KEYDOWN:
@@ -249,7 +387,11 @@ void window_manager_event (SDL_Event event) {
 			/* Primero, analizar si el evento cae dentro de alguna ventana */
 			
 			if (event.button.button != SDL_BUTTON_LEFT) break;
-			map = NULL;
+			
+			/* Para los botones, antes del mouse down asumir que nadie está presionado */
+			for_process.button = 0;
+			for_process.ventana = NULL;
+			
 			manejado = FALSE;
 			/*if (list_msg != NULL) {
 				message_mouse_down (event.button.x, event.button.y, &map);
@@ -266,7 +408,7 @@ void window_manager_event (SDL_Event event) {
 				if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 					/* Pasarlo al manejador de la ventana */
 					if (ventana->mouse_down != NULL) {
-						manejado = ventana->mouse_down (ventana, x - ventana->x, y - ventana->y, &map);
+						manejado = ventana->mouse_down (ventana, x - ventana->x, y - ventana->y);
 					}
 					
 					if (manejado && primero != ventana) {
@@ -276,10 +418,14 @@ void window_manager_event (SDL_Event event) {
 				}
 			}
 			
-			cp_button_down (map);
+			/* Procesar el mouse down */
+			window_button_down_process (&for_process);
 			break;
 		case SDL_MOUSEMOTION:
-			map = NULL; /* Para los botones de cierre */
+			/* Para los botones, antes del mouse motion asumir que nadie está presionado */
+			for_process.button = 0;
+			for_process.ventana = NULL;
+			
 			if (drag != NULL) {
 				/* Mover la ventana a las coordenadas del mouse - los offsets */
 				drag->x = event.motion.x - drag_x;
@@ -297,7 +443,7 @@ void window_manager_event (SDL_Event event) {
 					/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 					if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 						if (ventana->mouse_motion != NULL) {
-							manejado = ventana->mouse_motion (ventana, x - ventana->x, y - ventana->y, &map);
+							manejado = ventana->mouse_motion (ventana, x - ventana->x, y - ventana->y);
 						}
 					}
 				}
@@ -305,8 +451,7 @@ void window_manager_event (SDL_Event event) {
 				/* Recorrer las ventanas restantes y mandarles un evento mouse motion nulo */
 				while (ventana != NULL) {
 					if (ventana->mouse_motion != NULL) {
-						int *t;
-						ventana->mouse_motion (ventana, -1, -1, &t);
+						ventana->mouse_motion (ventana, -1, -1);
 					}
 					
 					ventana = ventana->next;
@@ -316,13 +461,18 @@ void window_manager_event (SDL_Event event) {
 				}
 			}
 			
-			cp_button_motion (map);
+			window_button_motion_process (&for_process);
+			
 			break;
 		case SDL_MOUSEBUTTONUP:
 			if (event.button.button != SDL_BUTTON_LEFT) break;
 			drag = NULL;
 			manejado = FALSE;
-			map = NULL;
+			
+			/* Para los botones, antes del mouse motion asumir que nadie está presionado */
+			for_process.button = 0;
+			for_process.ventana = NULL;
+			
 			x = event.button.x;
 			y = event.button.y;
 			
@@ -337,15 +487,14 @@ void window_manager_event (SDL_Event event) {
 				/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
 				if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
 					if (ventana->mouse_up != NULL) {
-						manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y, &map);
+						manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y);
 					}
 				}
 				ventana = next;
 			}
 			
-			if (map == NULL) {
-				cp_button_up (NULL);
-			}
+			window_button_up_process (&for_process);
+			
 			break;
 	}
 }

@@ -45,10 +45,19 @@
 
 #define ANIM_VEL 2
 
-int juego_mouse_down (Ventana *v, int x, int y, int **button_map);
-int juego_mouse_motion (Ventana *v, int x, int y, int **button_map);
-int juego_mouse_up (Ventana *v, int x, int y, int **button_map);
+enum {
+	JUEGO_BUTTON_CLOSE = 0,
+	
+	JUEGO_NUM_BUTTONS
+};
+
+int juego_mouse_down (Ventana *v, int x, int y);
+int juego_mouse_motion (Ventana *v, int x, int y);
+int juego_mouse_up (Ventana *v, int x, int y);
 void juego_draw (Ventana *v, SDL_Surface *surface);
+void juego_draw_button_close (Ventana *v, int frame);
+void juego_button_frame (Ventana *, int button, int frame);
+void juego_button_event (Ventana *, int button);
 
 /* Algunas constantes */
 const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
@@ -72,6 +81,7 @@ Juego *crear_juego (int top_window) {
 	window_set_data (j->ventana, j);
 	
 	window_register_mouse_events (j->ventana, juego_mouse_down, juego_mouse_motion, juego_mouse_up);
+	window_register_buttons (j->ventana, JUEGO_NUM_BUTTONS, juego_button_frame, juego_button_event);
 	
 	/* Valores propios del juego */
 	j->turno = 0;
@@ -79,7 +89,6 @@ Juego *crear_juego (int top_window) {
 	j->inicio = -1;
 	j->resalte = -1;
 	j->timer = 0;
-	j->close_frame = IMG_BUTTON_CLOSE_UP;
 	
 	j->local = j->remote = 0;
 	j->retry = 0;
@@ -123,14 +132,6 @@ void eliminar_juego (Juego *j) {
 		j->ventana = NULL;
 	}
 	
-	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
-	if (cp_old_map == &(j->close_frame)) {
-		cp_old_map = NULL;
-	}
-	if (cp_last_button == &(j->close_frame)) {
-		cp_last_button = NULL;
-	}
-	
 	if (j->nick_remoto_image != NULL) SDL_FreeSurface (j->nick_remoto_image);
 	if (j->nick_remoto_image_blue != NULL) SDL_FreeSurface (j->nick_remoto_image_blue);
 	
@@ -150,7 +151,34 @@ void eliminar_juego (Juego *j) {
 	free (j);
 }
 
-int juego_mouse_down (Ventana *v, int x, int y, int **button_map) {
+void juego_button_frame (Ventana *v, int button, int frame) {
+	if (button == JUEGO_BUTTON_CLOSE) {
+		/* Redibujar el botón */
+		juego_draw_button_close (v, frame);
+		window_want_redraw (v);
+	}
+}
+
+void juego_button_event (Ventana *v, int button) {
+	Juego *j;
+	if (button == JUEGO_BUTTON_CLOSE) {
+		/* Quitar esta ventana */
+		j = (Juego *) window_get_data (v);
+		if (j->estado != NET_CLOSED) {
+			j->last_fin = NET_USER_QUIT;
+			j->retry = 0;
+			/* Destruir la ventana asociada con este juego */
+			window_destroy (j->ventana);
+			j->ventana = NULL;
+			
+			enviar_fin (j);
+		} else {
+			eliminar_juego (j);
+		}
+	}
+}
+
+int juego_mouse_down (Ventana *v, int x, int y) {
 	Juego *j;
 	j = (Juego *) window_get_data (v);
 	
@@ -161,8 +189,7 @@ int juego_mouse_down (Ventana *v, int x, int y, int **button_map) {
 	} else if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
 		/* FIXME: Arreglar lo de los botones */
-		*button_map = &(j->close_frame);
-		window_want_redraw (v);
+		window_button_mouse_down (v, JUEGO_BUTTON_CLOSE);
 		return TRUE;
 	} else if (y >= 16) {
 		/* El evento cae dentro de la ventana */
@@ -172,7 +199,7 @@ int juego_mouse_down (Ventana *v, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int juego_mouse_motion (Ventana *v, int x, int y, int **button_map) {
+int juego_mouse_motion (Ventana *v, int x, int y) {
 	Juego *j;
 	
 	j = (Juego *) window_get_data (v);
@@ -206,8 +233,7 @@ int juego_mouse_motion (Ventana *v, int x, int y, int **button_map) {
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* FIXME: Arreglar lo de los botones */
-		*button_map = &(j->close_frame);
-		window_want_redraw (v);
+		window_button_mouse_motion (v, JUEGO_BUTTON_CLOSE);
 		return TRUE;
 	}
 	if ((y >= 16) || (x >= 64 && x < 168)) {
@@ -218,7 +244,7 @@ int juego_mouse_motion (Ventana *v, int x, int y, int **button_map) {
 	return FALSE;
 }
 
-int juego_mouse_up (Ventana *v, int x, int y, int **button_map) {
+int juego_mouse_up (Ventana *v, int x, int y) {
 	int g, h;
 	
 	Juego *j;
@@ -288,23 +314,9 @@ int juego_mouse_up (Ventana *v, int x, int y, int **button_map) {
 	/* Revisar si el evento cae dentro del botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
-		*button_map = &(j->close_frame);
+		window_button_mouse_up (v, JUEGO_BUTTON_CLOSE);
 		window_want_redraw (v);
-		if (cp_button_up (*button_map)) {
-			/* Quitar esta ventana */
-			if (j->estado != NET_CLOSED) {
-				j->last_fin = NET_USER_QUIT;
-				j->retry = 0;
-				/* Destruir la ventana asociada con este juego */
-				window_destroy (j->ventana);
-				j->ventana = NULL;
-				
-				enviar_fin (j);
-			} else {
-				eliminar_juego (j);
-				return TRUE;
-			}
-		}
+		return TRUE;
 	}
 	
 	if ((y >= 16) || (x >= 64 && x < 168)) {
@@ -498,6 +510,21 @@ fin_and_close:
 	}
 }
 
+void juego_draw_button_close (Ventana *v, int frame) {
+	SDL_Surface *surface = window_get_surface (v);
+	SDL_Rect rect;
+	
+	/* Dibujar el botón de cierre */
+	rect.x = 192;
+	rect.y = 26;
+	rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
+	rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	
+	SDL_BlitSurface (images[IMG_BUTTON_CLOSE_UP + frame], NULL, surface, &rect);
+}
+
 void juego_draw (Ventana *v, SDL_Surface *surface) {
 	SDL_Rect rect, rect2;
 	int g, h;
@@ -506,13 +533,7 @@ void juego_draw (Ventana *v, SDL_Surface *surface) {
 	
 	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, &rect);
 	
-	/* Dibujar el botón de cierre */
-	rect.x = 192;
-	rect.y = 26;
-	rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
-	rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
-	
-	SDL_BlitSurface (images[j->close_frame], NULL, surface, &rect);
+	juego_draw_button_close (v, 0);
 	
 	/* dibujar las fichas antes del tablero */
 	for (g = 0; g < 6; g++) {
