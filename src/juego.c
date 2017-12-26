@@ -59,14 +59,156 @@ void juego_draw_button_close (Ventana *v, int frame);
 void juego_button_frame (Ventana *, int button, int frame);
 void juego_button_event (Ventana *, int button);
 
+void juego_dibujar_resalte (Juego *j);
+void juego_dibujar_tablero (Juego *j);
+
 /* Algunas constantes */
-const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
-const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
+static const int tablero_cols[7] = {32, 56, 81, 105, 129, 153, 178};
+static const int tablero_filas[6] = {69, 93, 117, 141, 166, 190};
+static const int resalte_pos[7] = {30, 53, 79, 102, 126, 150, 175};
 
 static Juego *network_game_list = NULL;
 
 Juego *get_game_list (void) {
 	return network_game_list;
+}
+
+void juego_first_time_draw (Juego  *j) {
+	SDL_Surface *surface;
+	SDL_Rect rect;
+	
+	surface = window_get_surface (j->ventana);
+	
+	SDL_FillRect (surface, NULL, 0); /* Transparencia total */
+	
+	SDL_SetAlpha (images[IMG_WINDOW], 0, 0);
+	
+	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, NULL);
+	
+	/* Dibujar el nombre del jugador local */
+	rect.x = 74;
+	rect.y = 242;
+	rect.w = nick_image->w;
+	rect.h = nick_image->h;
+	
+	SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
+	
+	/* Dibujar el texto de "conectando" */
+	rect.x = 74;
+	rect.y = 272;
+	rect.w = text_waiting->w;
+	rect.h = text_waiting->h;
+	
+	SDL_BlitSurface (text_waiting, NULL, surface, &rect);
+	
+	/* Dibujar el botón de cierre */
+	juego_draw_button_close (j->ventana, 0);
+	
+	/* Dibujar el tablero */
+	rect.x = 26;
+	rect.y = 65;
+	rect.w = images[IMG_BOARD]->w;
+	rect.h = images[IMG_BOARD]->h;
+	
+	SDL_BlitSurface (images[IMG_BOARD], NULL, surface, &rect);
+	
+	window_flip (j->ventana);
+}
+
+int juego_timer_callback_cargando (Ventana *v) {
+	Juego *j;
+	SDL_Rect rect, rect2;
+	SDL_Surface *surface;
+	
+	surface = window_get_surface (v);
+	
+	j = (Juego *) window_get_data (v);
+	
+	/* Borrar con la ventana */
+	rect.x = 39;
+	rect.y = 235;
+	rect.h = 64;
+	rect.w = 32;
+	
+	window_update (v, &rect);
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	
+	/* Los botones de carga */
+	if (j->estado == NET_SYN_SENT) {
+		rect.x = 39;
+		rect.y = 235;
+		rect.w = 32;
+		rect.h = 32;
+	
+		rect2.x = (j->timer % 19) * 32;
+		rect2.y = 0;
+		rect2.w = rect2.h = 32;
+	
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
+		
+		rect.x = 39;
+		rect.y = 265;
+		rect.w = 32;
+		rect.h = 32;
+	
+		rect2.x = (j->timer % 19) * 32;
+		rect2.y = 0;
+		rect2.w = rect2.h = 32;
+		
+		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
+	}
+	
+	j->timer++;
+	if (j->timer >= 19) j->timer = 0;
+	
+	return TRUE;
+}
+
+int juego_timer_callback_anim (Ventana *v) {
+	int g, h, i;
+	Juego *j;
+	SDL_Surface *surface;
+	SDL_Rect rect;
+	
+	j = (Juego *) window_get_data (v);
+	surface = window_get_surface (v);
+	
+	if (j->num_a > 0) {
+		j->animaciones[0].frame++;
+		g = j->animaciones[0].frame / ANIM_VEL;
+		if (g == j->animaciones[0].fila) {
+			/* Finalizar esta animación */
+			j->tablero[j->animaciones[0].fila][j->animaciones[0].col] = j->animaciones[0].color;
+			
+			/* Recorrer las otras animaciones */
+			for (h = 1; h < j->num_a; h++) {
+				j->animaciones[h - 1] = j->animaciones[h];
+			}
+			j->num_a--;
+		}
+	}
+	
+	juego_dibujar_tablero (j);
+	
+	if (j->num_a == 0) {
+		if (j->win != 0) {
+			i = IMG_WIN_1 + (j->win_dir - 1);
+			rect.w = images[i]->w;
+			rect.h = images[i]->h;
+			rect.x = 28 + (j->win_col * 24);
+			rect.y = 65 + ((5 - j->win_fila) * 24);
+			
+			if (j->win_dir == 2) {
+				rect.y = 65 + ((5 - j->win_fila - 3) * 24);
+			}
+			
+			SDL_BlitSurface (images[i],  NULL, surface, &rect);
+		}
+		return FALSE;
+	}
+	
+	return TRUE;
 }
 
 Juego *crear_juego (int top_window) {
@@ -93,6 +235,7 @@ Juego *crear_juego (int top_window) {
 	j->local = j->remote = 0;
 	j->retry = 0;
 	j->estado = NET_CLOSED;
+	j->close_frame = 0;
 	
 	/* Para la animación */
 	j->num_a = 0;
@@ -120,6 +263,12 @@ Juego *crear_juego (int top_window) {
 	/* Ligar el nuevo objeto juego */
 	j->next = network_game_list;
 	network_game_list = j;
+	
+	/* Dibujar la ventana la primera vez */
+	
+	window_register_timer_events (j->ventana, juego_timer_callback_cargando);
+	window_enable_timer (j->ventana);
+	juego_first_time_draw  (j);
 	
 	return j;
 }
@@ -152,9 +301,12 @@ void eliminar_juego (Juego *j) {
 }
 
 void juego_button_frame (Ventana *v, int button, int frame) {
+	Juego *j;
 	if (button == JUEGO_BUTTON_CLOSE) {
 		/* Redibujar el botón */
 		juego_draw_button_close (v, frame);
+		j = (Juego *) window_get_data (v);
+		j->close_frame = frame;
 	}
 }
 
@@ -198,12 +350,197 @@ int juego_mouse_down (Ventana *v, int x, int y) {
 	return FALSE;
 }
 
+void juego_dibujar_resalte (Juego *j) {
+	Uint32 color;
+	SDL_Surface *surface;
+	SDL_Rect rect, rect2;
+	int g;
+	
+	surface = window_get_surface (j->ventana);
+	
+	color = SDL_MapRGB (surface->format, 0x00, 0x52, 0x9b);
+	
+	rect.x = 26;
+	rect.y = 46;
+	rect.w = 182;
+	rect.h = 47;
+	
+	SDL_FillRect (surface, &rect, color);
+	window_update (j->ventana, &rect);
+	
+	/* Redibujar las fichas de la fila superior */
+	for (g = 0; g < 7; g++) {
+		if (j->tablero[0][g] == 0) continue;
+		rect.x = tablero_cols[g];
+		rect.y = tablero_filas[0];
+		
+		rect.w = images[IMG_COINBLUE]->w;
+		rect.h = images[IMG_COINBLUE]->h;
+		
+		if (j->tablero[0][g] == 1) {
+			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+		}
+	}
+	
+	/* Si existe alguna pieza en animación sobre la fila superior, redibujar */
+	if (j->num_a > 0) {
+		g = j->animaciones[0].frame / ANIM_VEL;
+		if (g == 0) {
+			rect.x = tablero_cols[j->animaciones[0].col];
+			rect.y = tablero_filas[0];
+			rect.w = images[IMG_COINBLUE]->w;
+			rect.h = images[IMG_COINBLUE]->h;
+		
+			if (j->animaciones[0].color == 1) {
+				SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+			} else {
+				SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+			}
+		}
+	}
+	
+	/* Redibujar el pedazo de tablero */
+	rect.x = 26;
+	rect.y = 65;
+	rect.w = 182;
+	rect.h = 28;
+	
+	rect2.x = rect2.y = 0;
+	rect2.w = 182;
+	rect2.h = 28;
+	
+	SDL_BlitSurface (images[IMG_BOARD], &rect2, surface, &rect);
+	
+	/* Redibujar el pedazo de botón de cierre borrado */
+	juego_draw_button_close (j->ventana, j->close_frame);
+	if (j->resalte == -1) return;
+	
+	/* Ahora sí, redibujar el resalte */
+	rect.y = 46;
+	rect.x = resalte_pos[j->resalte];
+	rect.w = images[IMG_BIGCOINRED]->w;
+	rect.h = images[IMG_BIGCOINRED]->h;
+	if (j->turno % 2 == 0) { /* El que empieza siempre es rojo */
+		SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, surface, &rect);
+	} else {
+		SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, surface, &rect);
+	}
+}
+
+void juego_dibujar_tablero (Juego *j) {
+	Uint32 color;
+	SDL_Surface *surface;
+	SDL_Rect rect, rect2;
+	int g, h;
+	
+	surface = window_get_surface (j->ventana);
+	
+	color = SDL_MapRGB (surface->format, 0x00, 0x52, 0x9b);
+	
+	rect.x = 26;
+	rect.y = 46;
+	rect.w = 182;
+	rect.h = 171;
+	
+	SDL_FillRect (surface, &rect, color);
+	window_update (j->ventana, &rect);
+	
+	/* Redibujar las fichas de la fila superior */
+	/* dibujar las fichas antes del tablero */
+	for (g = 0; g < 6; g++) {
+		for (h = 0; h < 7; h++) {
+			if (j->tablero[g][h] == 0) continue;
+			rect.x = tablero_cols[h];
+			rect.y = tablero_filas[g];
+			
+			rect.w = images[IMG_COINBLUE]->w;
+			rect.h = images[IMG_COINBLUE]->h;
+			
+			if (j->tablero[g][h] == 1) {
+				SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+			} else {
+				SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+			}
+		}
+	}
+	
+	/* Dibujar la ficha en plena animación */
+	if (j->num_a > 0) {
+		rect.x = tablero_cols[j->animaciones[0].col];
+		g = j->animaciones[0].frame / ANIM_VEL;
+		rect.y = tablero_filas[g];
+		rect.w = images[IMG_COINBLUE]->w;
+		rect.h = images[IMG_COINBLUE]->h;
+		
+		if (j->animaciones[0].color == 1) {
+			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+		}
+	}
+	
+	rect.x = 26;
+	rect.y = 65;
+	rect.w = images[IMG_BOARD]->w;
+	rect.h = images[IMG_BOARD]->h;
+	
+	SDL_BlitSurface (images[IMG_BOARD], NULL, surface, &rect);
+	
+	/* Redibujar el pedazo de botón de cierre borrado */
+	juego_draw_button_close (j->ventana, j->close_frame);
+	if (j->resalte != -1) {
+		/* Ahora sí, redibujar el resalte */
+		rect.y = 46;
+		rect.x = resalte_pos[j->resalte];
+		rect.w = images[IMG_BIGCOINRED]->w;
+		rect.h = images[IMG_BIGCOINRED]->h;
+		if (j->turno % 2 == 0) { /* El que empieza siempre es rojo */
+			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, surface, &rect);
+		} else {
+			SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, surface, &rect);
+		}
+	}
+	
+	/* Dibujar el nombre del jugador local */
+	rect.x = 74;
+	rect.y = 242;
+	rect.w = images[IMG_WINDOW]->w - 74;
+	rect.h = nick_image->h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	window_update (j->ventana, &rect);
+	
+	SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
+	
+	/* Borrar el texto de "conectando" */
+	rect.x = 74;
+	rect.y = 272;
+	rect.w = images[IMG_WINDOW]->w - 74;
+	rect.h = text_waiting->h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	window_update (j->ventana, &rect);
+	
+	/* Dibujar el nick remoto */
+	rect.x = 74;
+	rect.y = 272;
+	rect.w = j->nick_remoto_image->w;
+	rect.h = j->nick_remoto_image->h;
+	
+	SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
+}
+
 int juego_mouse_motion (Ventana *v, int x, int y) {
 	Juego *j;
+	int old_resalte;
 	
 	j = (Juego *) window_get_data (v);
 	
 	/* Primero, quitar el resalte */
+	old_resalte = j->resalte;
+	
 	j->resalte = -1;
 	
 	/* Si es nuestro turno, hacer resalte */
@@ -225,8 +562,10 @@ int juego_mouse_motion (Ventana *v, int x, int y) {
 		} else if (x >= 178 && x < 206 && j->tablero[0][6] == 0) {
 			j->resalte = 6;
 		}
-		
-		/* TODO: Dibujar aquí la ficha resaltada y llamar a window_update */
+	}
+	
+	if (old_resalte != j->resalte) {
+		juego_dibujar_resalte (j);
 	}
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
@@ -308,6 +647,9 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 			j->tablero[g][h] = 0;
 			
 			/* TODO: Redibujar aquí el tablero e invocar a window_update */
+			juego_dibujar_tablero (j);
+			window_register_timer_events (j->ventana, juego_timer_callback_anim);
+			window_enable_timer (j->ventana);
 		}
 	}
 	
@@ -489,6 +831,9 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 			j->num_a++;
 			
 			j->tablero[g][col] = 0;
+			
+			window_register_timer_events (j->ventana, juego_timer_callback_anim);
+			window_enable_timer (j->ventana);
 		}
 	}
 	
@@ -525,230 +870,15 @@ void juego_draw_button_close (Ventana *v, int frame) {
 	window_update (v, &rect);
 }
 
-void juego_draw (Ventana *v, SDL_Surface *surface) {
-	SDL_Rect rect, rect2;
-	int g, h;
-	
-	Juego *j = (Juego *) window_get_data (v);
-	
-	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, &rect);
-	
-	juego_draw_button_close (v, 0);
-	
-	/* dibujar las fichas antes del tablero */
-	for (g = 0; g < 6; g++) {
-		for (h = 0; h < 7; h++) {
-			if (j->tablero[g][h] == 0) continue;
-			rect.x = tablero_cols[h];
-			rect.y = tablero_filas[g];
-			
-			rect.w = images[IMG_COINBLUE]->w;
-			rect.h = images[IMG_COINBLUE]->h;
-			
-			if (j->tablero[g][h] == 1) {
-				SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
-			} else {
-				SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
-			}
-		}
-	}
-	
-	/* Dibujar la ficha en plena animación */
-	if (j->num_a > 0) {
-		rect.x = tablero_cols[j->animaciones[0].col];
-		g = j->animaciones[0].frame / ANIM_VEL;
-		rect.y = tablero_filas[g];
-		rect.w = images[IMG_COINBLUE]->w;
-		rect.h = images[IMG_COINBLUE]->h;
-		
-		if (j->animaciones[0].color == 1) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
-		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
-		}
-		
-		j->animaciones[0].frame++;
-		g = j->animaciones[0].frame / ANIM_VEL;
-		if (g == j->animaciones[0].fila) {
-			/* Finalizar esta animación */
-			j->tablero[j->animaciones[0].fila][j->animaciones[0].col] = j->animaciones[0].color;
-			
-			/* Recorrer las otras animaciones */
-			for (h = 1; h < j->num_a; h++) {
-				j->animaciones[h - 1] = j->animaciones[h];
-			}
-			j->num_a--;
-		}
-	}
-	
-	rect.x = 26;
-	rect.y = 65;
-	rect.w = images[IMG_BOARD]->w;
-	rect.h = images[IMG_BOARD]->h;
-	
-	SDL_BlitSurface (images[IMG_BOARD], NULL, surface, &rect);
-	
-	/* Los botones de carga */
-	if (j->estado == NET_SYN_SENT) {
-		rect.x = 39;
-		rect.y = 235;
-		rect.w = 32;
-		rect.h = 32;
-	
-		rect2.x = (j->timer % 19) * 32;
-		rect2.y = 0;
-		rect2.w = rect2.h = 32;
-	
-		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
-	
-		rect.x = 39;
-		rect.y = 265;
-		rect.w = 32;
-		rect.h = 32;
-	
-		rect2.x = (j->timer % 19) * 32;
-		rect2.y = 0;
-		rect2.w = rect2.h = 32;
-		
-		SDL_BlitSurface (images[IMG_LOADING], &rect2, surface, &rect);
-	} else {
-		/* Dibujar las fichas de colores */
-		rect.x = 43;
-		rect.y = 239;
-		rect.w = images[IMG_COINRED]->w;
-		rect.h = images[IMG_COINRED]->h;
-		
-		if (j->inicio == 0) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
-		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
-		}
-		
-		rect.x = 43;
-		rect.y = 269;
-		rect.w = images[IMG_COINRED]->w;
-		rect.h = images[IMG_COINRED]->h;
-		
-		if (j->inicio != 0) {
-			SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
-		} else {
-			SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
-		}
-	}
-	
-	/* Dibujar el nombre del jugador local */
-	rect.x = 74;
-	rect.y = 242;
-	rect.w = nick_image->w;
-	rect.h = nick_image->h;
-	
-	if (j->estado == NET_SYN_SENT) {
-		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
-	} else {
-		SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
-	}
-	
-	/* Dibujamos el nick remoto, sólo si no es un SYN inicial */
-	if (j->estado != NET_SYN_SENT && j->nick_remoto_image != NULL) {
-		rect.x = 74;
-		rect.y = 272;
-		rect.w = j->nick_remoto_image->w;
-		rect.h = j->nick_remoto_image->h;
-		
-		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
-	} else {
-		rect.x = 74;
-		rect.y = 272;
-		rect.w = text_waiting->w;
-		rect.h = text_waiting->h;
-		
-		SDL_BlitSurface (text_waiting, NULL, surface, &rect);
-	}
-	
-	j->timer++;
-	if (j->timer >= 19) j->timer = 0;
-	
-	if (j->resalte >= 0) {
-		/* Dibujar la ficha resaltada en la columna correspondiente */
-		rect.y = 46;
-		switch (j->resalte) {
-			case 0:
-				rect.x = 30;
-				break;
-			case 1:
-				rect.x = 53;
-				break;
-			case 2:
-				rect.x = 79;
-				break;
-			case 3:
-				rect.x = 102;
-				break;
-			case 4:
-				rect.x = 126;
-				break;
-			case 5:
-				rect.x = 150;
-				break;
-			case 6:
-				rect.x = 175;
-				break;
-		}
-		rect.w = images[IMG_BIGCOINRED]->w;
-		rect.h = images[IMG_BIGCOINRED]->h;
-		if (j->turno % 2 == 0) { /* El que empieza siempre es rojo */
-			SDL_BlitSurface (images[IMG_BIGCOINRED], NULL, surface, &rect);
-		} else {
-			SDL_BlitSurface (images[IMG_BIGCOINBLUE], NULL, surface, &rect);
-		}
-	}
-	
-	if (j->win != 0 && j->num_a == 0) {
-		switch (j->win_dir) {
-			case 1:
-				rect.w = images[IMG_WIN_1]->w;
-				rect.h = images[IMG_WIN_1]->h;
-				rect.x = 28 + (j->win_col * 24);
-				rect.y = 65 + ((5 - j->win_fila) * 24);
-				
-				SDL_BlitSurface (images[IMG_WIN_1], NULL, surface, &rect);
-				
-				break;
-			case 3:
-				rect.w = images[IMG_WIN_3]->w;
-				rect.h = images[IMG_WIN_3]->h;
-				rect.x = 28 + (j->win_col * 24);
-				rect.y = 65 + ((5 - j->win_fila) * 24);
-				
-				SDL_BlitSurface (images[IMG_WIN_3], NULL, surface, &rect);
-				break;
-			case 2:
-				/* Estas diagonales apuntan a la esquina inferior izquierda */
-				rect.w = images[IMG_WIN_2]->w;
-				rect.h = images[IMG_WIN_2]->h;
-				rect.x = 28 + (j->win_col * 24);
-				rect.y = 65 + ((5 - j->win_fila - 3) * 24);
-				
-				SDL_BlitSurface (images[IMG_WIN_2], NULL, surface, &rect);
-				break;
-			case 4:
-				/* Esta digonal apunta a la esquina superior izquierda */
-				rect.w = images[IMG_WIN_4]->w;
-				rect.h = images[IMG_WIN_4]->h;
-				rect.x = 28 + (j->win_col * 24);
-				rect.y = 65 + ((5 - j->win_fila) * 24);
-				
-				SDL_BlitSurface (images[IMG_WIN_4], NULL, surface, &rect);
-				break;
-		}
-	}
-}
-
 void recibir_nick (Juego *j, const char *nick) {
 	SDL_Color blanco;
 	SDL_Color negro;
+	SDL_Rect rect;
+	SDL_Surface *surface;
 	
 	memcpy (j->nick_remoto, nick, sizeof (j->nick_remoto));
+	
+	surface = window_get_surface (j->ventana);
 	
 	/* Renderizar el nick del otro jugador */
 	blanco.r = blanco.g = blanco.b = 255;
@@ -758,4 +888,71 @@ void recibir_nick (Juego *j, const char *nick) {
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xFF;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
 	j->nick_remoto_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
+	
+	/* Quitar el timer */
+	window_disable_timer (j->ventana);
+	
+	/* Borrar con el fondo */
+	rect.x = 39;
+	rect.y = 235;
+	rect.h = 64;
+	rect.w = 32;
+	
+	window_update (j->ventana, &rect);
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	
+	/* En este punto, dibujar ya las piezas de color en orden */
+	rect.x = 43;
+	rect.y = 239;
+	rect.w = images[IMG_COINRED]->w;
+	rect.h = images[IMG_COINRED]->h;
+	
+	if (j->inicio == 0) {
+		SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+	} else {
+		SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+	}
+	
+	rect.x = 43;
+	rect.y = 269;
+	rect.w = images[IMG_COINRED]->w;
+	rect.h = images[IMG_COINRED]->h;
+	
+	if (j->inicio != 0) {
+		SDL_BlitSurface (images[IMG_COINRED], NULL, surface, &rect);
+	} else {
+		SDL_BlitSurface (images[IMG_COINBLUE], NULL, surface, &rect);
+	}
+	
+	/* Dibujar los nombres en el orden correcto */
+	
+	/* Dibujar el nombre del jugador local */
+	rect.x = 74;
+	rect.y = 242;
+	rect.w = images[IMG_WINDOW]->w - 74;
+	rect.h = nick_image->h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	window_update (j->ventana, &rect);
+	
+	SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
+	
+	/* Borrar el texto de "conectando" */
+	rect.x = 74;
+	rect.y = 272;
+	rect.w = images[IMG_WINDOW]->w - 74;
+	rect.h = text_waiting->h;
+	
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
+	window_update (j->ventana, &rect);
+	
+	/* Dibujar el nick remoto */
+	rect.x = 74;
+	rect.y = 272;
+	rect.w = j->nick_remoto_image->w;
+	rect.h = j->nick_remoto_image->h;
+	
+	SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
 }
+

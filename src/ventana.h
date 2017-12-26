@@ -41,6 +41,7 @@ typedef int (*FindWindowMouseFunc)(Ventana *, int, int);
 typedef int (*FindWindowKeyFunc)(Ventana *, SDL_KeyboardEvent *);
 typedef void (*FindWindowButtonFrameChange)(Ventana *, int button, int frame);
 typedef void (*FindWindowButtonEvent)(Ventana *, int button);
+typedef int (*FindWindowTimerCallback)(Ventana *);
 
 void window_manager_background_update (SDL_Rect *rect);
 
@@ -58,7 +59,7 @@ void window_show (Ventana *v);
 
 void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWindowMouseFunc motion, FindWindowMouseFunc up);
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up);
-
+void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb);
 void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event);
 
 void window_button_mouse_down (Ventana *v, int button);
@@ -71,8 +72,12 @@ void window_cancel_draging (void);
 void window_destroy (Ventana *v);
 void window_raise (Ventana *v);
 
+void window_enable_timer (Ventana *v);
+void window_disable_timer (Ventana *v);
+
 void window_manager_event (SDL_Event event);
 void window_manager_draw (SDL_Surface *screen);
+void window_manager_timer (void);
 
 int SDL_RectEmpty(const SDL_Rect *r);
 int SDL_HasIntersection(const SDL_Rect * A, const SDL_Rect * B);

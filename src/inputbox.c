@@ -325,7 +325,7 @@ static void draw_inputbox_textfield (InputBox *ib) {
 	/* Borrar antes */
 	rect.x = 22;
 	rect.y = ib->box_y;
-	rect.w = 14 + (10 * p);
+	rect.w = 28 + (10 * p);
 	rect.h = 27;
 	
 	window_update (ib->ventana, &rect);

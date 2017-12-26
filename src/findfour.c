@@ -364,6 +364,8 @@ int game_loop (void) {
 			}
 		}
 		
+		window_manager_timer ();
+		
 		//printf ("Dibujar: \n");
 		window_manager_draw (screen);
 		

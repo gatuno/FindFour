@@ -54,12 +54,16 @@ struct _Ventana {
 	/* Data "extra" que cargan las ventanas */
 	void *data;
 	
+	/* Si tiene el timer activo o no */
+	int timer_active;
+	
 	/* Manejadores de la ventana */
 	FindWindowMouseFunc mouse_down;
 	FindWindowMouseFunc mouse_motion;
 	FindWindowMouseFunc mouse_up;
 	FindWindowKeyFunc key_down;
 	FindWindowKeyFunc key_up;
+	FindWindowTimerCallback timer_callback;
 	
 	/* Manejadores de los botones */
 	FindWindowButtonFrameChange button_frame_func;
@@ -295,6 +299,8 @@ Ventana *window_create (int w, int h, int top_window) {
 	
 	nueva->mostrar = TRUE;
 	
+	nueva->timer_active = FALSE;
+	
 	if (top_window || primero == NULL) {
 		/* Si pidieron ser ventana al frente, mostrarla */
 		nueva->prev = NULL;
@@ -326,6 +332,8 @@ Ventana *window_create (int w, int h, int top_window) {
 	nueva->mouse_down = nueva->mouse_motion = nueva->mouse_up = NULL;
 	
 	nueva->key_down = nueva->key_up = NULL;
+	nueva->timer_callback = NULL;
+	
 	nueva->data = NULL;
 	
 	/* Información de los botones */
@@ -378,6 +386,10 @@ void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWin
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up) {
 	v->key_down = down;
 	v->key_up = up;
+}
+
+void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb) {
+	v->timer_callback = cb;
 }
 
 void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event) {
@@ -557,6 +569,14 @@ void window_raise (Ventana *v) {
 	}
 }
 
+void window_enable_timer (Ventana *v) {
+	v->timer_active = TRUE;
+}
+
+void window_disable_timer (Ventana *v) {
+	v->timer_active = FALSE;
+}
+
 void window_manager_event (SDL_Event event) {
 	int manejado;
 	Ventana *ventana, *next;
@@ -700,6 +720,22 @@ void window_manager_event (SDL_Event event) {
 			window_button_up_process (&for_process);
 			
 			break;
+	}
+}
+
+void window_manager_timer (void) {
+	Ventana *ventana;
+	int res;
+	
+	for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
+		if (ventana->timer_active && ventana->timer_callback != NULL) {
+			/* Llamar al timer de la ventana */
+			res = ventana->timer_callback (ventana);
+			
+			if (res == FALSE) {
+				ventana->timer_active = FALSE;
+			}
+		}
 	}
 }
 
