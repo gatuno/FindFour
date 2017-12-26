@@ -64,6 +64,7 @@ struct _Ventana {
 	FindWindowKeyFunc key_down;
 	FindWindowKeyFunc key_up;
 	FindWindowTimerCallback timer_callback;
+	FindWindowFocusEvent focus_callback;
 	
 	/* Manejadores de los botones */
 	FindWindowButtonFrameChange button_frame_func;
@@ -309,6 +310,10 @@ Ventana *window_create (int w, int h, int top_window) {
 			primero = nueva;
 			ultimo = nueva;
 		} else {
+			/* Correr aquí el evento de perder foco de la ventana */
+			if (primero->focus_callback != NULL) {
+				primero->focus_callback (primero, FALSE);
+			}
 			primero->prev = nueva;
 		}
 		
@@ -333,6 +338,7 @@ Ventana *window_create (int w, int h, int top_window) {
 	
 	nueva->key_down = nueva->key_up = NULL;
 	nueva->timer_callback = NULL;
+	nueva->focus_callback = NULL;
 	
 	nueva->data = NULL;
 	
@@ -407,6 +413,10 @@ void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange
 	
 	v->buttons_frame = (int *) malloc (sizeof (int) * count);
 	memset (v->buttons_frame, 0, sizeof (int) * count);
+}
+
+void window_register_focus_events (Ventana *v, FindWindowFocusEvent event) {
+	v->focus_callback = event;
 }
 
 void window_button_mouse_down (Ventana *v, int button) {
@@ -528,6 +538,10 @@ void window_destroy (Ventana *v) {
 		v->prev->next = v->next;
 	} else {
 		primero = v->next;
+		
+		if (primero != NULL && primero->focus_callback != NULL) {
+			primero->focus_callback (primero, TRUE);
+		}
 	}
 	
 	if (v->next != NULL) {
@@ -543,6 +557,11 @@ void window_destroy (Ventana *v) {
 
 void window_raise (Ventana *v) {
 	if (v != primero) {
+		/* Disparar el evento de "perder foco" en la ventana primero */
+		if (primero->focus_callback != NULL) {
+			primero->focus_callback (primero, FALSE);
+		}
+		
 		/* Desligar completamente */
 		if (v->prev != NULL) {
 			v->prev->next = v->next;
@@ -566,6 +585,10 @@ void window_raise (Ventana *v) {
 		primero->draw_update.x = primero->draw_update.y = 0;
 		primero->draw_update.w = primero->coords.w;
 		primero->draw_update.h = primero->coords.h;
+		
+		if (primero->focus_callback != NULL) {
+			primero->focus_callback (primero, TRUE);
+		}
 	}
 }
 

@@ -42,6 +42,7 @@ typedef int (*FindWindowKeyFunc)(Ventana *, SDL_KeyboardEvent *);
 typedef void (*FindWindowButtonFrameChange)(Ventana *, int button, int frame);
 typedef void (*FindWindowButtonEvent)(Ventana *, int button);
 typedef int (*FindWindowTimerCallback)(Ventana *);
+typedef void (*FindWindowFocusEvent)(Ventana *, int gain);
 
 void window_manager_background_update (SDL_Rect *rect);
 
@@ -61,7 +62,7 @@ void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWin
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up);
 void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb);
 void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event);
-
+void window_register_focus_events (Ventana *v, FindWindowFocusEvent event);
 void window_button_mouse_down (Ventana *v, int button);
 void window_button_mouse_motion (Ventana *v, int button);
 void window_button_mouse_up (Ventana *v, int button);

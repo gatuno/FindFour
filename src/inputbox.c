@@ -206,7 +206,7 @@ static void full_inputbox_draw (InputBox *ib) {
 
 static void draw_inputbox_textfield (InputBox *ib) {
 	SDL_Surface *surface;
-	
+	Uint32 color;
 	SDL_Rect rect, rect2, rect3;
 	int p, q, g;
 	int cursor;
@@ -296,9 +296,9 @@ static void draw_inputbox_textfield (InputBox *ib) {
 		
 		cursor += rect.w;
 	}
-#if 0
+	
 	// Pendiente, necesito saber si tengo el foco
-	if (get_first_window () == (Ventana *)ib) {
+	if (ib->cursor_vel >= 0) {
 		/* Dibujar el cursor si soy la primera ventana */
 		if (ib->cursor_vel < INPUTBOX_CURSOR_RATE) {
 			rect.x = 37 + cursor;
@@ -306,17 +306,12 @@ static void draw_inputbox_textfield (InputBox *ib) {
 			rect.w = 1;
 			rect.h = 19;
 
-			color = SDL_MapRGB (screen->format, 0xFF, 0xFF, 0xFF);
+			color = SDL_MapRGB (surface->format, 0xFF, 0xFF, 0xFF);
 
-			SDL_FillRect (screen, &rect, color);
+			SDL_FillRect (surface, &rect, color);
 		}
-		
-		ib->cursor_vel++;
-		if (ib->cursor_vel >= 24) ib->cursor_vel = 0;
-	} else {
-		ib->cursor_vel = 0;
 	}
-#endif
+	
 	q = (ib->h - 52) / 8;
 	
 	/* Ahora dibujar el inputbox */
@@ -378,6 +373,34 @@ void inputbox_button (Ventana *v, int button) {
 	}
 }
 
+/* Se dispara cuando una ventana gana o pierde el foco */
+void inputbox_focus_event (Ventana *v, int gain) {
+	InputBox *ib;
+	
+	ib = (InputBox *) window_get_data (v);
+	
+	if (gain) {
+		ib->cursor_vel = 0;
+		window_enable_timer (v);
+	} else {
+		ib->cursor_vel = -1;
+		window_disable_timer (v);
+	}
+	
+	draw_inputbox_textfield (ib);
+}
+
+int inputbox_timer_callback (Ventana *v) {
+	InputBox *ib;
+	
+	ib = (InputBox *) window_get_data (v);
+	
+	ib->cursor_vel++;
+	if (ib->cursor_vel >= 24) ib->cursor_vel = 0;
+	
+	draw_inputbox_textfield (ib);
+}
+
 InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, InputBoxFunc close_func) {
 	InputBox *ib;
 	SDL_Color blanco;
@@ -414,12 +437,15 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, 
 	window_register_mouse_events (ib->ventana, inputbox_mouse_down, inputbox_mouse_motion, inputbox_mouse_up);
 	window_register_keyboard_events (ib->ventana, inputbox_key_down, NULL);
 	window_register_buttons (ib->ventana, INPUTBOX_NUM_BUTTONS, inputbox_button_frame, inputbox_button);
+	window_register_focus_events (ib->ventana, inputbox_focus_event);
+	window_register_timer_events (ib->ventana, inputbox_timer_callback);
 	
 	/* Callbacks de la entrada */
 	ib->callback = func;
 	ib->close_callback = close_func;
 	
 	ib->cursor_vel = 0;
+	window_enable_timer (ib->ventana);
 	
 	ib->color_azul = SDL_MapRGB (window_get_surface(ib->ventana)->format, 0x02, 0x80, 0xcd);
 	
