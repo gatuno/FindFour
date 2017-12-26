@@ -73,20 +73,10 @@ typedef struct _RecentPlay {
 typedef struct _Chat {
 	Ventana *ventana;
 	
-	/* El botón de cierre */
-	int close_frame; /* ¿El refresh es necesario? */
-	
-	/* El bóton de flecha hacia arriba y hacia abajo */
-	int up_frame, down_frame;
-	
-	/* El botón de buddy locales */
-	int broadcast_list_frame;
-	
-	/* El botón de partidas recientes */
-	int recent_list_frame;
+	int close_frame;
 	
 	/* Los 8 buddys buttons */
-	int buddys[8];
+	int buddys_frame[8];
 	
 	int list_display;
 	int list_offset;

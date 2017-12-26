@@ -103,6 +103,9 @@ void inicializar_chat (void) {
 	
 	c->azul1 = SDL_MapRGB (window_get_surface (c->ventana)->format, 0, 0x52, 0x9B);
 	
+	memset (c->buddys_frame, 0, sizeof (c->buddys_frame));
+	c->close_frame = 0;
+	
 	chat_full_draw (c);
 	
 	static_chat = c;
@@ -253,12 +256,15 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 	
 	switch (button) {
 		case CHAT_BUTTON_CLOSE:
+			c->close_frame = frame;
+			
 			/* Dibujar el botón de cierre */
 			rect.x = 190;
 			rect.y = 30;
 			rect.w = images[IMG_BUTTON_CLOSE_UP]->w;
 			rect.h = images[IMG_BUTTON_CLOSE_UP]->h;
-	
+			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 	
 			SDL_BlitSurface (images[IMG_BUTTON_CLOSE_UP + frame], NULL, surface, &rect);
@@ -269,6 +275,7 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 			rect.w = images[IMG_BUTTON_ARROW_1_UP]->w;
 			rect.h = images[IMG_BUTTON_ARROW_1_UP]->h;
 			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 			
 			/* Dibujar el color azul de la barra de desplazamiento */
@@ -293,6 +300,7 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 			rect.w = images[IMG_BUTTON_ARROW_2_UP]->w;
 			rect.h = images[IMG_BUTTON_ARROW_2_UP]->h;
 			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 			
 			/* Dibujar el color azul de la barra de desplazamiento */
@@ -317,6 +325,7 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 			rect.w = images[IMG_BUTTON_LIST_UP]->w;
 			rect.h = images[IMG_BUTTON_LIST_UP]->h;
 			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 			
 			SDL_BlitSurface (images[IMG_BUTTON_LIST_UP + frame], NULL, surface, &rect);
@@ -335,6 +344,7 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 			rect.w = images[IMG_BUTTON_LIST_UP]->w;
 			rect.h = images[IMG_BUTTON_LIST_UP]->h;
 			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 			
 			SDL_BlitSurface (images[IMG_BUTTON_LIST_UP + frame], NULL, surface, &rect);
@@ -360,17 +370,19 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 			RecentPlay *recent;
 			
 			g = button - CHAT_BUTTON_BUDDY_1;
+			c->buddys_frame[g] = frame;
 			
 			rect.x = 18;
 			rect.y = 65 + (g * 26);
 			rect.w = images[IMG_SHADOW_UP]->w;
 			rect.h = images[IMG_SHADOW_UP]->h;
 			
+			window_update (v, &rect);
 			SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
 			
 			SDL_BlitSurface (images[IMG_SHADOW_UP + frame], NULL, surface, &rect);
 			
-			/* Dibujar el textp encima del botón */
+			/* Dibujar el texto encima del botón */
 			if (c->list_display == CHAT_LIST_MCAST) {
 				b = 0;
 				
@@ -433,30 +445,91 @@ void chat_button_frame (Ventana *v, int button, int frame) {
 
 void chat_button_event (Ventana *v, int button) {
 	Chat *c = (Chat *) window_get_data (v);
+	SDL_Rect rect;
+	SDL_Surface *surface = window_get_surface (v);
+	int g;
+	
 	switch (button) {
 		case CHAT_BUTTON_CLOSE:
 			window_hide (v);
 			break;
 		case CHAT_BUTTON_UP:
-			if (c->list_offset > 0) c->list_offset -= 8; /* Asumiendo que siempre son múltiplos de 8 */
+			if (c->list_offset > 0) {
+				c->list_offset -= 8; /* Asumiendo que siempre son múltiplos de 8 */
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
+			}
 			break;
 		case CHAT_BUTTON_DOWN:
 			if (c->list_display == CHAT_LIST_MCAST && c->list_offset + 8 < c->buddy_mcast_count) {
 				c->list_offset += 8;
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
 			} else if (c->list_display == CHAT_LIST_RECENT && c->list_offset + 8 < c->buddy_recent_count) {
 				c->list_offset += 8;
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
 			}
 			break;
 		case CHAT_BUTTON_BROADCAST_LIST:
 			if (c->list_display != CHAT_LIST_MCAST) {
 				c->list_offset = 0;
 				c->list_display = CHAT_LIST_MCAST;
+				
+				/* Cuando la lista cambia, redibujar todos los buddys y el texto arriba */
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
+				
+				/* Borrar el texto anterior */
+				rect.x = 0;
+				rect.w = images[IMG_WINDOW_CHAT]->w;
+				rect.y = 36;
+				rect.h = 18;
+				
+				SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
+				window_update (v, &rect);
+				
+				rect.x = (images[IMG_WINDOW_CHAT]->w - c->mcast_text->w) / 2;
+				rect.y = 36;
+				rect.w = c->mcast_text->w;
+				rect.h = c->mcast_text->h;
+				
+				SDL_BlitSurface (c->mcast_text, NULL, surface, &rect);
+				
+				chat_button_frame (static_chat->ventana, CHAT_BUTTON_CLOSE, static_chat->close_frame);
 			}
 			break;
 		case CHAT_BUTTON_RECENT_LIST:
 			if (c->list_display != CHAT_LIST_RECENT) {
 				c->list_offset = 0;
 				c->list_display = CHAT_LIST_RECENT;
+				
+				/* Cuando la lista cambia, redibujar todos los buddys y el texto arriba */
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
+				
+				/* Borrar el texto anterior */
+				rect.x = 0;
+				rect.w = images[IMG_WINDOW_CHAT]->w;
+				rect.y = 36;
+				rect.h = 18;
+				
+				SDL_BlitSurface (images[IMG_WINDOW_CHAT], &rect, surface, &rect);
+				window_update (v, &rect);
+				
+				rect.x = (images[IMG_WINDOW_CHAT]->w - c->recent_text->w) / 2;
+				rect.y = 36;
+				rect.w = c->mcast_text->w;
+				rect.h = c->mcast_text->h;
+				
+				SDL_BlitSurface (c->recent_text, NULL, surface, &rect);
+				
+				chat_button_frame (static_chat->ventana, CHAT_BUTTON_CLOSE, static_chat->close_frame);
 			}
 			break;
 		case CHAT_BUTTON_BUDDY_1:
@@ -567,6 +640,7 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	BuddyMCast *nuevo;
 	char buffer[256];
 	SDL_Color blanco = {255, 255, 255};
+	int g;
 	
 	/* Buscar entre los buddys locales que no esté duplicado */
 	nuevo = static_chat->buddy_mcast;
@@ -621,10 +695,18 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	nuevo->last_seen = SDL_GetTicks();
 	
 	static_chat->buddy_mcast_count++;
+	
+	/* Programar el redibujado de los buddys */
+	if (static_chat->list_display == CHAT_LIST_MCAST) {
+		for (g = 0; g < 8; g++) {
+			chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+		}
+	}
 }
 
 void buddy_list_mcast_remove_item (BuddyMCast *item) {
 	BuddyMCast *prev;
+	int g;
 	
 	if (item == static_chat->buddy_mcast) {
 		/* Principio de la lista */
@@ -643,10 +725,18 @@ void buddy_list_mcast_remove_item (BuddyMCast *item) {
 	}
 	
 	free (item);
+	
+	if (static_chat->list_display == CHAT_LIST_MCAST) {
+		/* Programar el redibujado de los buddys */
+		for (g = 0; g < 8; g++) {
+			chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+		}
+	}
 }
 
 void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock) {
 	BuddyMCast *this;
+	int g;
 	
 	/* Tratar de encontrar el buddy, pero ignorar si no aparece */
 	this = static_chat->buddy_mcast;
@@ -654,6 +744,12 @@ void buddy_list_mcast_remove (struct sockaddr *direccion, socklen_t tamsock) {
 	while (this != NULL) {
 		if (sockaddr_cmp (direccion, (struct sockaddr *) &(this->cliente)) == 0) {
 			buddy_list_mcast_remove_item (this);
+			if (static_chat->list_display == CHAT_LIST_MCAST) {
+				/* Programar el redibujado de los buddys */
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
+			}
 			break;
 		}
 		this = this->next;
@@ -684,6 +780,7 @@ void buddy_list_recent_add (const char *texto) {
 	RecentPlay *nuevo;
 	char buffer[256];
 	SDL_Color blanco = {255, 255, 255};
+	int g;
 	
 	/* Buscar entre los buddys locales que no esté duplicado */
 	nuevo = static_chat->buddy_recent;
@@ -703,5 +800,12 @@ void buddy_list_recent_add (const char *texto) {
 	
 	nuevo->text = TTF_RenderUTF8_Blended (ttf14_facefront, texto, blanco);
 	static_chat->buddy_recent_count++;
+	
+	/* Programar el redibujado de los buddys */
+	if (static_chat->list_display == CHAT_LIST_RECENT) {
+		for (g = 0; g < 8; g++) {
+			chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+		}
+	}
 }
 

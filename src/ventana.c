@@ -381,6 +381,7 @@ void window_hide (Ventana *v) {
 
 void window_show (Ventana *v) {
 	v->mostrar = TRUE;
+	window_flip (v);
 }
 
 void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWindowMouseFunc motion, FindWindowMouseFunc up) {
