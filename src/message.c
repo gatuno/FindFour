@@ -297,14 +297,14 @@ int message_mouse_up (int m_x, int m_y, int **button_map) {
 	
 	if (m_x >= b_x && m_x < b_x + images[IMG_BUTTON_ERROR_UP]->w && m_y >= b_y && m_y < b_y + images[IMG_BUTTON_ERROR_UP]->h) {
 		*button_map = &(list_msg->button_frame);
-		if (cp_button_up (*button_map)) {
+		//if (cp_button_up (*button_map)) {
 			/* Eliminar este mensaje */
 			next = list_msg->next;
 			SDL_FreeSurface (list_msg->text_image);
 			SDL_FreeSurface (list_msg->button_text_image);
 			free (list_msg);
 			list_msg = next;
-		}
+		//}
 		return TRUE;
 	}
 	

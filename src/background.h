@@ -26,7 +26,8 @@
 #include <SDL.h>
 
 void setup_background (void);
-void draw_background (SDL_Surface *screen);
+void draw_background (SDL_Surface *screen, SDL_Rect *rect);
+void update_background (SDL_Surface *screen);
 void background_mouse_motion (int x, int y);
 
 #endif /* __BACKGROUND_H__ */

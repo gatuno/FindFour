@@ -29,6 +29,7 @@
 #	include <sys/socket.h>
 #	include <netinet/in.h>
 #	include <netdb.h>
+#	include <arpa/inet.h>
 #endif
 #include <sys/types.h>
 
@@ -59,6 +60,8 @@
 #endif
 
 #include "findfour.h"
+#include "utf8.h"
+#include "chat.h"
 #include "juego.h"
 #include "netplay.h"
 #include "stun.h"
@@ -1071,11 +1074,11 @@ void process_netevent (void) {
 		
 		if (message.type == TYPE_MCAST_ANNOUNCE) {
 			/* Multicast de anuncio de partida de red */
-			buddy_list_mcast_add (message.nick, &peer, peer_socklen);
+			buddy_list_mcast_add (message.nick, (struct sockaddr *) &peer, peer_socklen);
 			continue;
 		} else if (message.type == TYPE_MCAST_FIN) {
 			/* Multicast de eliminación de partida */
-			buddy_list_mcast_remove (&peer, peer_socklen);
+			buddy_list_mcast_remove ((struct sockaddr *) &peer, peer_socklen);
 			continue;
 		}
 		

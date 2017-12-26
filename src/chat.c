@@ -556,7 +556,7 @@ void chat_full_draw (Chat *c) {
 		SDL_BlitSurface (c->recent_text, NULL, surface, &rect);
 	}
 	
-	window_want_redraw (c->ventana);
+	window_flip (c->ventana);
 }
 
 void show_chat (void) {

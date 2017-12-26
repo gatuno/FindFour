@@ -26,13 +26,24 @@
 
 #include "ventana.h"
 
+#include "background.h"
+
+#ifndef SDL_FALSE
+#define SDL_FALSE 0
+#endif
+
+#ifndef SDL_TRUE
+#define SDL_TRUE -1
+#endif
+
 struct _Ventana {
 	SDL_Surface *surface;
-	int needs_redraw;
 	
 	/* Coordenadas de la ventana */
-	int x, y;
-	int w, h;
+	SDL_Rect coords;
+	
+	/* Rectangulo de actualización */
+	SDL_Rect draw_update;
 	
 	int mostrar;
 	
@@ -40,6 +51,7 @@ struct _Ventana {
 	int button_start;
 	int *buttons_frame;
 	
+	/* Data "extra" que cargan las ventanas */
 	void *data;
 	
 	/* Manejadores de la ventana */
@@ -78,6 +90,180 @@ static int button_counter = 1;
 
 static CPButton old_map = {0, NULL}, last_map = {0, NULL}, for_process;
 
+#define MAX_RECTS 64
+
+static SDL_Rect update_rects[MAX_RECTS];
+static int num_rects = 0;
+
+/* Funciones */
+int SDL_RectEmpty(const SDL_Rect *r) {
+	return ((!r) || (r->w <= 0) || (r->h <= 0)) ? SDL_TRUE : SDL_FALSE;
+}
+
+int SDL_HasIntersection(const SDL_Rect * A, const SDL_Rect * B) {
+	int Amin, Amax, Bmin, Bmax;
+
+	if (!A) {
+		return SDL_FALSE;
+	}
+
+	if (!B) {
+		return SDL_FALSE;
+	}
+
+	/* Special cases for empty rects */
+	if (SDL_RectEmpty(A) || SDL_RectEmpty(B)) {
+		return SDL_FALSE;
+	}
+
+	/* Horizontal intersection */
+	Amin = A->x;
+	Amax = Amin + A->w;
+	Bmin = B->x;
+	Bmax = Bmin + B->w;
+	if (Bmin > Amin)
+		Amin = Bmin;
+	if (Bmax < Amax)
+		Amax = Bmax;
+	if (Amax <= Amin)
+		return SDL_FALSE;
+
+	/* Vertical intersection */
+	Amin = A->y;
+	Amax = Amin + A->h;
+	Bmin = B->y;
+	Bmax = Bmin + B->h;
+	if (Bmin > Amin)
+		Amin = Bmin;
+	if (Bmax < Amax)
+		Amax = Bmax;
+	if (Amax <= Amin)
+		return SDL_FALSE;
+
+	return SDL_TRUE;
+}
+
+int SDL_IntersectRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result) {
+	int Amin, Amax, Bmin, Bmax;
+
+	if (!A) {
+		return SDL_FALSE;
+	}
+
+	if (!B) {
+		return SDL_FALSE;
+	}
+
+	if (!result) {
+		return SDL_FALSE;
+	}
+
+	/* Special cases for empty rects */
+	if (SDL_RectEmpty(A) || SDL_RectEmpty(B)) {
+		result->w = 0;
+		result->h = 0;
+		return SDL_FALSE;
+	}
+
+	/* Horizontal intersection */
+	Amin = A->x;
+	Amax = Amin + A->w;
+	Bmin = B->x;
+	Bmax = Bmin + B->w;
+	if (Bmin > Amin)
+		Amin = Bmin;
+	result->x = Amin;
+	if (Bmax < Amax)
+		Amax = Bmax;
+	if (Amax - Amin < 0) {
+		result->w = 0;
+	} else {
+		result->w = Amax - Amin;
+	}
+
+	/* Vertical intersection */
+	Amin = A->y;
+	Amax = Amin + A->h;
+	Bmin = B->y;
+	Bmax = Bmin + B->h;
+	if (Bmin > Amin)
+		Amin = Bmin;
+	result->y = Amin;
+	if (Bmax < Amax)
+		Amax = Bmax;
+	if (Amax - Amin < 0) {
+		result->h = 0;
+	} else {
+		result->h = Amax - Amin;
+	}
+
+	return !SDL_RectEmpty(result);
+}
+
+void SDL_UnionRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result) {
+	int Amin, Amax, Bmin, Bmax;
+
+	if (!A) {
+		return;
+	}
+
+	if (!B) {
+		return;
+	}
+
+	if (!result) {
+		return;
+	}
+
+	/* Special cases for empty Rects */
+	if (SDL_RectEmpty(A)) {
+		if (SDL_RectEmpty(B)) {
+			/* A and B empty */
+			return;
+		} else {
+			/* A empty, B not empty */
+			*result = *B;
+			return;
+		}
+	} else {
+		if (SDL_RectEmpty(B)) {
+			/* A not empty, B empty */
+			*result = *A;
+			return;
+		}
+	}
+
+	/* Horizontal union */
+	Amin = A->x;
+	Amax = Amin + A->w;
+	Bmin = B->x;
+	Bmax = Bmin + B->w;
+	if (Bmin < Amin)
+		Amin = Bmin;
+	result->x = Amin;
+	if (Bmax > Amax)
+		Amax = Bmax;
+	result->w = Amax - Amin;
+
+	/* Vertical union */
+	Amin = A->y;
+	Amax = Amin + A->h;
+	Bmin = B->y;
+	Bmax = Bmin + B->h;
+	if (Bmin < Amin)
+		Amin = Bmin;
+	result->y = Amin;
+	if (Bmax > Amax)
+		Amax = Bmax;
+	result->h = Amax - Amin;
+}
+
+void window_manager_background_update (SDL_Rect *rect) {
+	update_rects[num_rects] = *rect;
+	
+	num_rects++;
+}
+
 Ventana *window_create (int w, int h, int top_window) {
 	Ventana *nueva;
 	
@@ -87,10 +273,8 @@ Ventana *window_create (int w, int h, int top_window) {
 	nueva->surface = SDL_AllocSurface (SDL_SWSURFACE, w, h, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 	//SDL_SetAlpha (nueva->surface, 0, 0);
 	
-	nueva->needs_redraw = TRUE;
-	
-	nueva->w = w;
-	nueva->h = h;
+	nueva->coords.w = w;
+	nueva->coords.h = h;
 	
 	if (start_y + h >= 480) {
 		start_y = 0;
@@ -101,8 +285,10 @@ Ventana *window_create (int w, int h, int top_window) {
 		start_x = 0;
 	}
 	
-	nueva->x = start_x;
-	nueva->y = start_y;
+	nueva->coords.x = start_x;
+	nueva->coords.y = start_y;
+	
+	nueva->draw_update = nueva->coords;
 	
 	start_x += 20;
 	start_y += 20;
@@ -115,6 +301,7 @@ Ventana *window_create (int w, int h, int top_window) {
 		nueva->next = primero;
 		if (primero == NULL) {
 			primero = nueva;
+			ultimo = nueva;
 		} else {
 			primero->prev = nueva;
 		}
@@ -163,12 +350,19 @@ SDL_Surface * window_get_surface (Ventana *v) {
 	return v->surface;
 }
 
-void window_want_redraw (Ventana *v) {
-	v->needs_redraw = TRUE;
+void window_update (Ventana *v, SDL_Rect *rect) {
+	SDL_UnionRect (&(v->draw_update), rect, &(v->draw_update));
+}
+
+void window_flip (Ventana *v) {
+	v->draw_update = v->coords;
+	v->draw_update.x -= v->coords.x;
+	v->draw_update.y -= v->coords.y;
 }
 
 void window_hide (Ventana *v) {
 	v->mostrar = FALSE;
+	window_manager_background_update (&v->coords);
 }
 
 void window_show (Ventana *v) {
@@ -330,6 +524,8 @@ void window_destroy (Ventana *v) {
 		ultimo = v->prev;
 	}
 	
+	window_manager_background_update (&v->coords);
+	
 	free (v);
 }
 
@@ -353,6 +549,11 @@ void window_raise (Ventana *v) {
 		primero->prev = v;
 		v->prev = NULL;
 		primero = v;
+		
+		/* Marcar la ventana como para dibujar todo */
+		primero->draw_update.x = primero->draw_update.y = 0;
+		primero->draw_update.w = primero->coords.w;
+		primero->draw_update.h = primero->coords.h;
 	}
 }
 
@@ -405,10 +606,10 @@ void window_manager_event (SDL_Event event) {
 				if (!ventana->mostrar) continue;
 				
 				/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-				if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+				if (x >= ventana->coords.x && x < ventana->coords.x + ventana->coords.w && y >= ventana->coords.y && y < ventana->coords.y + ventana->coords.h) {
 					/* Pasarlo al manejador de la ventana */
 					if (ventana->mouse_down != NULL) {
-						manejado = ventana->mouse_down (ventana, x - ventana->x, y - ventana->y);
+						manejado = ventana->mouse_down (ventana, x - ventana->coords.x, y - ventana->coords.y);
 					}
 					
 					if (manejado && primero != ventana) {
@@ -427,9 +628,12 @@ void window_manager_event (SDL_Event event) {
 			for_process.ventana = NULL;
 			
 			if (drag != NULL) {
+				/* Programar el redibujado del fondo */
+				window_manager_background_update (&drag->coords);
+				
 				/* Mover la ventana a las coordenadas del mouse - los offsets */
-				drag->x = event.motion.x - drag_x;
-				drag->y = event.motion.y - drag_y;
+				drag->coords.x = event.motion.x - drag_x;
+				drag->coords.y = event.motion.y - drag_y;
 			} else {
 				manejado = FALSE;
 				
@@ -441,9 +645,9 @@ void window_manager_event (SDL_Event event) {
 				y = event.motion.y;
 				for (ventana = primero; ventana != NULL && manejado == FALSE; ventana = ventana->next) {
 					/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-					if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+					if (x >= ventana->coords.x && x < ventana->coords.x + ventana->coords.w && y >= ventana->coords.y && y < ventana->coords.y + ventana->coords.h) {
 						if (ventana->mouse_motion != NULL) {
-							manejado = ventana->mouse_motion (ventana, x - ventana->x, y - ventana->y);
+							manejado = ventana->mouse_motion (ventana, x - ventana->coords.x, y - ventana->coords.y);
 						}
 					}
 				}
@@ -485,9 +689,9 @@ void window_manager_event (SDL_Event event) {
 			while (ventana != NULL && manejado == FALSE) {
 				next = ventana->next;
 				/* Si el evento hace match por las coordenadas, preguntarle a la ventana si lo quiere manejar */
-				if (x >= ventana->x && x < ventana->x + ventana->w && y >= ventana->y && y < ventana->y + ventana->h) {
+				if (x >= ventana->coords.x && x < ventana->coords.x + ventana->coords.w && y >= ventana->coords.y && y < ventana->coords.y + ventana->coords.h) {
 					if (ventana->mouse_up != NULL) {
-						manejado = ventana->mouse_up (ventana, x - ventana->x, y - ventana->y);
+						manejado = ventana->mouse_up (ventana, x - ventana->coords.x, y - ventana->coords.y);
 					}
 				}
 				ventana = next;
@@ -501,19 +705,75 @@ void window_manager_event (SDL_Event event) {
 
 void window_manager_draw (SDL_Surface *screen) {
 	Ventana *ventana;
-	SDL_Rect rect;
+	SDL_Rect rect, rect2;
+	int g;
+	int whole_flip = 0;
 	
-	draw_background (screen);
+	update_background (screen);
 	
-	for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
-		if (!ventana->mostrar) continue;
+	/* Primero, recolectar todos los rectangulos de actualización */
+	for (ventana = ultimo; ventana != NULL && whole_flip == 0; ventana = ventana->prev) {
+		if (!ventana->mostrar) {
+			ventana->draw_update.w = ventana->draw_update.h = 0;
+			continue;
+		}
 		
-		/* Ahora nosotros dibujamos las superficies */
-		rect.x = ventana->x;
-		rect.y = ventana->y;
-		rect.w = ventana->w;
-		rect.h = ventana->h;
+		if (SDL_RectEmpty (&ventana->draw_update)) continue;
 		
-		SDL_BlitSurface (ventana->surface, NULL, screen, &rect);
+		if (num_rects < MAX_RECTS) {
+			rect = ventana->draw_update;
+			
+			rect.x += ventana->coords.x;
+			rect.y += ventana->coords.y;
+			
+			update_rects[num_rects] = rect;
+			
+			num_rects++;
+			
+			if (num_rects == MAX_RECTS) {
+				/* Se activa el whole flip */
+				whole_flip = 1;
+			}
+		}
+		
+		ventana->draw_update.w = ventana->draw_update.h = 0;
 	}
+	
+	if (whole_flip) {
+		/* Dibujar todo directamente */
+		draw_background (screen, NULL);
+		
+		/* Recorrer las ventanas y dibujarlas todas */
+		for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
+			if (!ventana->mostrar) continue;
+			
+			SDL_BlitSurface (ventana->surface, NULL, screen, &ventana->coords);
+		}
+		
+		SDL_Flip (screen);
+	} else {
+		for (g = 0; g < num_rects; g++) {
+			/* Redibujar la porción de fondo que es necesaria */
+			draw_background (screen, &update_rects[g]);
+			
+			for (ventana = ultimo; ventana != NULL; ventana = ventana->prev) {
+				if (!ventana->mostrar) continue;
+				
+				if (SDL_IntersectRect (&update_rects[g], &ventana->coords, &rect)) {
+					/* Redibujar la porción de la ventana que requiere ser redibujada */
+					
+					rect2 = rect;
+					/* Origen */
+					rect2.x -= ventana->coords.x;
+					rect2.y -= ventana->coords.y;
+					
+					SDL_BlitSurface (ventana->surface, &rect2, screen, &rect);
+				}
+			}
+		}
+		
+		SDL_UpdateRects (screen, num_rects, update_rects);
+	}
+	
+	num_rects = 0;
 }

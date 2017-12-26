@@ -30,10 +30,13 @@
 #	include <sys/socket.h>
 #	include <netinet/in.h>
 #	include <netdb.h>
+#	include <arpa/inet.h>
 #endif
 #include <sys/types.h>
 
 #include "stun.h"
+#include "netplay.h"
+#include "resolv.h"
 #include "message.h"
 
 void build_binding_request (StunMessage* msg, int change_port, int change_ip, int id) {
@@ -269,7 +272,7 @@ void late_stun_connect (const char *hostname, int port, const struct addrinfo *r
 }
 
 void try_stun_binding (const char *server) {
-	const char *hostname;
+	char *hostname;
 	int puerto;
 	int valido;
 	

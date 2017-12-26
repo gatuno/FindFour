@@ -49,6 +49,7 @@
 
 #include "path.h"
 
+#include "ventana.h"
 #include "findfour.h"
 #include "background.h"
 #include "juego.h"
@@ -224,7 +225,8 @@ void late_connect (const char *hostname, int port, const struct addrinfo *res, i
 	conectar_con_sockaddr ((Juego *) ventana, nick_global, res->ai_addr, res->ai_addrlen);
 }
 
-void nueva_conexion (InputBox *ib, const char *texto) {
+void nueva_conexion (void *d, const char *texto) {
+	InputBox *ib = (InputBox *) d;
 	int valido, puerto;
 	char *hostname;
 	Ventana *ventana;
@@ -332,11 +334,14 @@ int game_loop (void) {
 		return GAME_QUIT;
 	}
 	
+	draw_background (screen, NULL);
 	inicializar_chat ();
 	
 	if (nick_default) {
 		crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, NULL);
 	}
+	
+	SDL_Flip (screen);
 	
 	SDL_EnableUNICODE (1);
 	
@@ -367,8 +372,6 @@ int game_loop (void) {
 			drawfuzz (0, 0, 760, 480);
 			message_display (screen);
 		}*/
-		
-		SDL_Flip (screen);
 		
 		now_time = SDL_GetTicks ();
 		if (now_time < last_time + FPS) SDL_Delay(last_time + FPS - now_time);

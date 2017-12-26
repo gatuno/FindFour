@@ -45,7 +45,7 @@ enum {
 	INPUTBOX_NUM_BUTTONS
 };
 
-static full_inputbox_draw (InputBox *ib) {
+static void full_inputbox_draw (InputBox *ib) {
 	SDL_Surface *surface;
 	
 	SDL_Rect rect, rect2, rect3;
@@ -200,6 +200,8 @@ static full_inputbox_draw (InputBox *ib) {
 	SDL_BlitSurface (images[ib->close_frame], NULL, surface, &rect);
 	
 	draw_inputbox_textfield (ib);
+	
+	window_flip (ib->ventana);
 }
 
 static void draw_inputbox_textfield (InputBox *ib) {
@@ -315,7 +317,18 @@ static void draw_inputbox_textfield (InputBox *ib) {
 		ib->cursor_vel = 0;
 	}
 #endif
-	window_want_redraw (ib->ventana);
+	q = (ib->h - 52) / 8;
+	
+	/* Ahora dibujar el inputbox */
+	p = (ib->w - 68) / 10;
+	
+	/* Borrar antes */
+	rect.x = 22;
+	rect.y = ib->box_y;
+	rect.w = 14 + (10 * p);
+	rect.h = 27;
+	
+	window_update (ib->ventana, &rect);
 }
 
 static void draw_inputbox_close (InputBox *ib) {
@@ -335,7 +348,7 @@ static void draw_inputbox_close (InputBox *ib) {
 	SDL_FillRect (surface, &rect, ib->color_azul);
 	
 	SDL_BlitSurface (images[ib->close_frame], NULL, surface, &rect);
-	window_want_redraw (ib->ventana);
+	window_update (ib->ventana, &rect);
 }
 
 /* Se dispara cuando un botón necesita ser re-dibujado */

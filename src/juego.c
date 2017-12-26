@@ -155,7 +155,6 @@ void juego_button_frame (Ventana *v, int button, int frame) {
 	if (button == JUEGO_BUTTON_CLOSE) {
 		/* Redibujar el botón */
 		juego_draw_button_close (v, frame);
-		window_want_redraw (v);
 	}
 }
 
@@ -227,7 +226,7 @@ int juego_mouse_motion (Ventana *v, int x, int y) {
 			j->resalte = 6;
 		}
 		
-		window_want_redraw (v);
+		/* TODO: Dibujar aquí la ficha resaltada y llamar a window_update */
 	}
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
@@ -307,7 +306,8 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 			j->num_a++;
 			
 			j->tablero[g][h] = 0;
-			window_want_redraw (v);
+			
+			/* TODO: Redibujar aquí el tablero e invocar a window_update */
 		}
 	}
 	
@@ -315,7 +315,6 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */
 		window_button_mouse_up (v, JUEGO_BUTTON_CLOSE);
-		window_want_redraw (v);
 		return TRUE;
 	}
 	
@@ -523,6 +522,7 @@ void juego_draw_button_close (Ventana *v, int frame) {
 	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
 	
 	SDL_BlitSurface (images[IMG_BUTTON_CLOSE_UP + frame], NULL, surface, &rect);
+	window_update (v, &rect);
 }
 
 void juego_draw (Ventana *v, SDL_Surface *surface) {
