@@ -108,15 +108,6 @@ enum {
 	NUM_SOUNDS
 };
 
-enum {
-	WINDOW_GAME,
-	WINDOW_CHAT,
-	
-	WINDOW_INPUT,
-	
-	NUM_WINDOWS
-};
-
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image, *nick_image_blue;
@@ -126,9 +117,6 @@ extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
 
 extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
-void nueva_conexion (void *ib, const char *texto);
-
-void findfour_default_keyboard_handler (SDL_KeyboardEvent *key);
 
 #endif /* __FINDFOUR_H__ */
 

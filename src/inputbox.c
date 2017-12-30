@@ -28,7 +28,6 @@
 
 #include "findfour.h"
 #include "inputbox.h"
-#include "cp-button.h"
 #include "ventana.h"
 
 int inputbox_mouse_down (Ventana *v, int x, int y);
@@ -457,15 +456,6 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, 
 void eliminar_inputbox (InputBox *ib) {
 	/* Desligar completamente */
 	window_destroy (ib->ventana);
-	ib->ventana = NULL;
-	
-	/* Si hay algún indicativo a estos viejos botones, eliminarlo */
-	if (cp_old_map == &(ib->close_frame) || cp_old_map == &(ib->send_frame)) {
-		cp_old_map = NULL;
-	}
-	if (cp_last_button == &(ib->send_frame) || cp_last_button == &(ib->close_frame)) {
-		cp_last_button = NULL;
-	}
 	
 	if (ib->text_s != NULL) SDL_FreeSurface (ib->text_s);
 	SDL_FreeSurface (ib->text_ask);

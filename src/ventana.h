@@ -25,8 +25,6 @@
 
 #include <SDL.h>
 
-#include "findfour.h"
-
 enum {
 	BUTTON_NORMAL = 0,
 	BUTTON_OVER,
@@ -60,6 +58,7 @@ void window_show (Ventana *v);
 
 void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWindowMouseFunc motion, FindWindowMouseFunc up);
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up);
+void window_register_default_keyboard_events (FindWindowKeyFunc down, FindWindowKeyFunc up);
 void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb);
 void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event);
 void window_register_focus_events (Ventana *v, FindWindowFocusEvent event);
@@ -79,11 +78,6 @@ void window_disable_timer (Ventana *v);
 void window_manager_event (SDL_Event event);
 void window_manager_draw (SDL_Surface *screen);
 void window_manager_timer (void);
-
-int SDL_RectEmpty(const SDL_Rect *r);
-int SDL_HasIntersection(const SDL_Rect * A, const SDL_Rect * B);
-int SDL_IntersectRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result);
-void SDL_UnionRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result);
 
 #endif /* __VENTANA_H__ */
 

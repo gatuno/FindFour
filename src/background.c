@@ -32,6 +32,7 @@
 #include "findfour.h"
 #include "ventana.h"
 #include "path.h"
+#include "sdl2_rect.h"
 
 /* Cuántos fondos diferentes hay */
 enum {

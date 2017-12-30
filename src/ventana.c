@@ -23,18 +23,9 @@
 #include <SDL.h>
 
 #include "findfour.h"
-
 #include "ventana.h"
-
 #include "background.h"
-
-#ifndef SDL_FALSE
-#define SDL_FALSE 0
-#endif
-
-#ifndef SDL_TRUE
-#define SDL_TRUE -1
-#endif
+#include "sdl2_rect.h"
 
 struct _Ventana {
 	SDL_Surface *surface;
@@ -100,168 +91,7 @@ static CPButton old_map = {0, NULL}, last_map = {0, NULL}, for_process;
 static SDL_Rect update_rects[MAX_RECTS];
 static int num_rects = 0;
 
-/* Funciones */
-int SDL_RectEmpty(const SDL_Rect *r) {
-	return ((!r) || (r->w <= 0) || (r->h <= 0)) ? SDL_TRUE : SDL_FALSE;
-}
-
-int SDL_HasIntersection(const SDL_Rect * A, const SDL_Rect * B) {
-	int Amin, Amax, Bmin, Bmax;
-
-	if (!A) {
-		return SDL_FALSE;
-	}
-
-	if (!B) {
-		return SDL_FALSE;
-	}
-
-	/* Special cases for empty rects */
-	if (SDL_RectEmpty(A) || SDL_RectEmpty(B)) {
-		return SDL_FALSE;
-	}
-
-	/* Horizontal intersection */
-	Amin = A->x;
-	Amax = Amin + A->w;
-	Bmin = B->x;
-	Bmax = Bmin + B->w;
-	if (Bmin > Amin)
-		Amin = Bmin;
-	if (Bmax < Amax)
-		Amax = Bmax;
-	if (Amax <= Amin)
-		return SDL_FALSE;
-
-	/* Vertical intersection */
-	Amin = A->y;
-	Amax = Amin + A->h;
-	Bmin = B->y;
-	Bmax = Bmin + B->h;
-	if (Bmin > Amin)
-		Amin = Bmin;
-	if (Bmax < Amax)
-		Amax = Bmax;
-	if (Amax <= Amin)
-		return SDL_FALSE;
-
-	return SDL_TRUE;
-}
-
-int SDL_IntersectRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result) {
-	int Amin, Amax, Bmin, Bmax;
-
-	if (!A) {
-		return SDL_FALSE;
-	}
-
-	if (!B) {
-		return SDL_FALSE;
-	}
-
-	if (!result) {
-		return SDL_FALSE;
-	}
-
-	/* Special cases for empty rects */
-	if (SDL_RectEmpty(A) || SDL_RectEmpty(B)) {
-		result->w = 0;
-		result->h = 0;
-		return SDL_FALSE;
-	}
-
-	/* Horizontal intersection */
-	Amin = A->x;
-	Amax = Amin + A->w;
-	Bmin = B->x;
-	Bmax = Bmin + B->w;
-	if (Bmin > Amin)
-		Amin = Bmin;
-	result->x = Amin;
-	if (Bmax < Amax)
-		Amax = Bmax;
-	if (Amax - Amin < 0) {
-		result->w = 0;
-	} else {
-		result->w = Amax - Amin;
-	}
-
-	/* Vertical intersection */
-	Amin = A->y;
-	Amax = Amin + A->h;
-	Bmin = B->y;
-	Bmax = Bmin + B->h;
-	if (Bmin > Amin)
-		Amin = Bmin;
-	result->y = Amin;
-	if (Bmax < Amax)
-		Amax = Bmax;
-	if (Amax - Amin < 0) {
-		result->h = 0;
-	} else {
-		result->h = Amax - Amin;
-	}
-
-	return !SDL_RectEmpty(result);
-}
-
-void SDL_UnionRect(const SDL_Rect * A, const SDL_Rect * B, SDL_Rect * result) {
-	int Amin, Amax, Bmin, Bmax;
-
-	if (!A) {
-		return;
-	}
-
-	if (!B) {
-		return;
-	}
-
-	if (!result) {
-		return;
-	}
-
-	/* Special cases for empty Rects */
-	if (SDL_RectEmpty(A)) {
-		if (SDL_RectEmpty(B)) {
-			/* A and B empty */
-			return;
-		} else {
-			/* A empty, B not empty */
-			*result = *B;
-			return;
-		}
-	} else {
-		if (SDL_RectEmpty(B)) {
-			/* A not empty, B empty */
-			*result = *A;
-			return;
-		}
-	}
-
-	/* Horizontal union */
-	Amin = A->x;
-	Amax = Amin + A->w;
-	Bmin = B->x;
-	Bmax = Bmin + B->w;
-	if (Bmin < Amin)
-		Amin = Bmin;
-	result->x = Amin;
-	if (Bmax > Amax)
-		Amax = Bmax;
-	result->w = Amax - Amin;
-
-	/* Vertical union */
-	Amin = A->y;
-	Amax = Amin + A->h;
-	Bmin = B->y;
-	Bmax = Bmin + B->h;
-	if (Bmin < Amin)
-		Amin = Bmin;
-	result->y = Amin;
-	if (Bmax > Amax)
-		Amax = Bmax;
-	result->h = Amax - Amin;
-}
+FindWindowKeyFunc default_keydown = NULL, default_keyup = NULL;
 
 void window_manager_background_update (SDL_Rect *rect) {
 	update_rects[num_rects] = *rect;
@@ -393,6 +223,11 @@ void window_register_mouse_events (Ventana *v, FindWindowMouseFunc down, FindWin
 void window_register_keyboard_events (Ventana *v, FindWindowKeyFunc down, FindWindowKeyFunc up) {
 	v->key_down = down;
 	v->key_up = up;
+}
+
+void window_register_default_keyboard_events (FindWindowKeyFunc down, FindWindowKeyFunc up) {
+	default_keydown = down;
+	default_keyup = up;
 }
 
 void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb) {
@@ -624,8 +459,8 @@ void window_manager_event (SDL_Event event) {
 			}
 			
 			/* Si el evento aún no ha sido manejado por alguna ventana, es de nuestro interés */
-			if (!manejado) {
-				findfour_default_keyboard_handler (&event.key);
+			if (!manejado && default_keydown != NULL) {
+				default_keydown (NULL, &event.key);
 			}
 			break;
 		case SDL_MOUSEBUTTONDOWN:

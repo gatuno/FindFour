@@ -54,7 +54,6 @@
 #include "background.h"
 #include "juego.h"
 #include "netplay.h"
-#include "cp-button.h"
 #include "chat.h"
 #include "inputbox.h"
 #include "utf8.h"
@@ -225,8 +224,7 @@ void late_connect (const char *hostname, int port, const struct addrinfo *res, i
 	conectar_con_sockaddr ((Juego *) ventana, nick_global, res->ai_addr, res->ai_addrlen);
 }
 
-void nueva_conexion (void *d, const char *texto) {
-	InputBox *ib = (InputBox *) d;
+void nueva_conexion (InputBox *ib, const char *texto) {
 	int valido, puerto;
 	char *hostname;
 	Ventana *ventana;
@@ -266,7 +264,7 @@ void cancelar_conexion (InputBox *ib, const char *texto) {
 	connect_window = NULL;
 }
 
-void findfour_default_keyboard_handler (SDL_KeyboardEvent *key) {
+int findfour_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 	if (key->keysym.sym == SDLK_F5) {
 		if (connect_window != NULL) {
 			/* Levantar la ventana de conexión al frente */
@@ -278,6 +276,8 @@ void findfour_default_keyboard_handler (SDL_KeyboardEvent *key) {
 	} else if (key->keysym.sym == SDLK_F8) {
 		show_chat ();
 	}
+	
+	return TRUE;
 }
 
 int main (int argc, char *argv[]) {
@@ -300,7 +300,6 @@ int main (int argc, char *argv[]) {
 	
 	server_port = 3300;
 	
-	cp_button_start ();
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
@@ -333,6 +332,8 @@ int game_loop (void) {
 		
 		return GAME_QUIT;
 	}
+	
+	window_register_default_keyboard_events (findfour_default_keyboard_handler, NULL);
 	
 	draw_background (screen, NULL);
 	inicializar_chat ();

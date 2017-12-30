@@ -38,7 +38,6 @@
 #include "findfour.h"
 #include "juego.h"
 #include "netplay.h"
-#include "cp-button.h"
 #include "draw-text.h"
 #include "message.h"
 #include "ventana.h"
@@ -54,7 +53,6 @@ enum {
 int juego_mouse_down (Ventana *v, int x, int y);
 int juego_mouse_motion (Ventana *v, int x, int y);
 int juego_mouse_up (Ventana *v, int x, int y);
-void juego_draw (Ventana *v, SDL_Surface *surface);
 void juego_draw_button_close (Ventana *v, int frame);
 void juego_button_frame (Ventana *, int button, int frame);
 void juego_button_event (Ventana *, int button);

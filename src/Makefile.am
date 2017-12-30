@@ -5,7 +5,6 @@ gamedatadir = $(pkgdatadir)/data
 bin_PROGRAMS = findfour
 findfour_SOURCES = findfour.c findfour.h \
 	netplay.c netplay.h \
-	cp-button.c cp-button.h \
 	stun.c stun.h \
 	juego.c juego.h \
 	chat.c chat.h \
@@ -16,7 +15,8 @@ findfour_SOURCES = findfour.c findfour.h \
 	path.c path.h \
 	background.c background.h \
 	resolv.c resolv.h \
-	ventana.c ventana.h
+	ventana.c ventana.h \
+	sdl2_rect.c sdl2_rect.h
 
 if MACOSX
 findfour_SOURCES += SDLMain.m SDLMain.h

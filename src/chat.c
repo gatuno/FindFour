@@ -37,7 +37,6 @@
 
 #include "findfour.h"
 #include "chat.h"
-#include "cp-button.h"
 #include "netplay.h"
 #include "juego.h"
 #include "ventana.h"
