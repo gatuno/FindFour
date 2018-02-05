@@ -205,7 +205,39 @@ void window_flip (Ventana *v) {
 }
 
 void window_hide (Ventana *v) {
+	int primero_changed = FALSE;
+	
 	v->mostrar = FALSE;
+	if (v == primero) {
+		if (v->focus_callback != NULL) {
+			v->focus_callback (v, FALSE);
+		}
+	}
+	
+	if (v != ultimo) {
+		/* Desligar completamente */
+		if (v->prev != NULL) {
+			v->prev->next = v->next;
+		} else {
+			primero = v->next;
+			primero_changed = TRUE;
+		}
+	
+		if (v->next != NULL) {
+			v->next->prev = v->prev;
+		}
+	
+		/* Mandar a trasfondo */
+		v->prev = ultimo;
+		ultimo->next = v;
+		v->next = NULL;
+		ultimo = v;
+	}
+	
+	if (primero_changed && primero->focus_callback != NULL) {
+		primero->focus_callback (primero, TRUE);
+	}
+	
 	window_manager_background_update (&v->coords);
 }
 

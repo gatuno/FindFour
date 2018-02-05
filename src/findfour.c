@@ -108,12 +108,14 @@ const char *images_names[NUM_IMAGES] = {
 	"images/win-4.png",
 	
 	"images/window.png",
+	"images/window_shadow.png",
 	"images/tab.png",
 	"images/inputbox.png",
 	
 	"images/chat.png",
 	
 	"images/error.png",
+	"images/error_shadow.png",
 	"images/boton-error-up.png",
 	"images/boton-error-over.png",
 	"images/boton-error-down.png",
@@ -370,12 +372,6 @@ int game_loop (void) {
 		//printf ("Dibujar: \n");
 		window_manager_draw (screen);
 		
-		/* Dibujar los mensajes en pantalla
-		if (list_msg != NULL) {
-			drawfuzz (0, 0, 760, 480);
-			message_display (screen);
-		}*/
-		
 		now_time = SDL_GetTicks ();
 		if (now_time < last_time + FPS) SDL_Delay(last_time + FPS - now_time);
 		
@@ -397,34 +393,6 @@ int game_loop (void) {
 	findfour_netclose ();
 	
 	return done;
-}
-
-void drawfuzz (int x, int y, int w, int h) {
-	int xx, yy;
-	SDL_Rect src, dest;
-
-	for (yy = y; yy < y + h; yy = yy + (images[IMG_FUZZ] -> h)) {
-		for (xx = x; xx < x + w; xx = xx + (images[IMG_FUZZ] -> w)) {
-			src.x = 0;
-			src.y = 0;
-			src.w = images[IMG_FUZZ] -> w;
-			src.h = images[IMG_FUZZ] -> h;
-
-			if (xx + src.w > x + w)
-			src.w = x + w - xx;
-
-			if (yy + src.h > y + h)
-			src.h = y + h - yy;
-
-			dest.x = xx;
-			dest.y = yy;
-
-			dest.w = src.w;
-			dest.h = src.h;
-
-			SDL_BlitSurface(images[IMG_FUZZ], &src, screen, &dest);
-		}
-	}
 }
 
 /* Set video mode: */

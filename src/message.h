@@ -32,14 +32,7 @@ enum {
 
 typedef struct _Message Message;
 
-extern Message *list_msg;
-
 void message_add (int tipo, const char *texto_boton, const char *cadena, ...);
-void message_display (SDL_Surface *screen);
-
-int message_mouse_down (int, int, int **);
-int message_mouse_motion (int, int, int **);
-int message_mouse_up (int, int, int **);
 
 #endif /* __MESSAGE_H__ */
 

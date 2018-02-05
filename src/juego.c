@@ -203,6 +203,15 @@ int juego_timer_callback_anim (Ventana *v) {
 			
 			SDL_BlitSurface (images[i],  NULL, surface, &rect);
 		}
+		
+		if (j->win != 0 || j->turno == 42) {
+			if (j->win == 1) {
+				// Somos ganadores
+				message_add (MSG_NORMAL, "Ok", "Has ganado la partida");
+			} else if (j->turno == 42) {
+				message_add (MSG_NORMAL, "Ok", "%s y tú han empatado", j->nick_remoto);
+			}
+		}
 		return FALSE;
 	}
 	
@@ -627,12 +636,6 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 			
 			if (j->win != 0 || j->turno == 42) {
 				j->estado = NET_WAIT_WINNER;
-				/*if (j->win != 0) {
-					// Somos ganadores
-					message_add (MSG_NORMAL, "Has ganado la partida");
-				} else {
-					message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
-				}*/
 			}
 			
 			/* Borrar la ficha del tablero y meterla a la cola de animación */
