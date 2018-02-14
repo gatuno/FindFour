@@ -367,7 +367,8 @@ int findfour_try_netinit4 (int puerto) {
 	
 	if (rc == 0) { /* Sin error */
 		for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-			if (ifa->ifa_addr->sa_family == AF_INET &&
+			if (ifa->ifa_addr != NULL &&
+			    ifa->ifa_addr->sa_family == AF_INET &&
 				(ifa->ifa_flags & IFF_LOOPBACK) == 0 && /* No queremos las interfaces Loopback */
 				(ifa->ifa_flags & IFF_MULTICAST)) { /* Y solo las que soportan multicast */
 				sa = (struct sockaddr_in *) ifa->ifa_addr;
@@ -467,7 +468,8 @@ int findfour_try_netinit6 (int puerto) {
 	
 	if (rc == 0) { /* Sin error */
 		for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-			if (ifa->ifa_addr->sa_family == AF_INET6 &&
+			if (ifa->ifa_addr != NULL &&
+			    ifa->ifa_addr->sa_family == AF_INET6 &&
 				(ifa->ifa_flags & IFF_LOOPBACK) == 0 && /* No queremos las interfaces Loopback */
 				(ifa->ifa_flags & IFF_MULTICAST)) { /* Y solo las que soportan multicast */
 				memset (&mcast_req6, 0, sizeof (mcast_req6));
