@@ -208,6 +208,9 @@ void change_nick (InputBox *ib, const char *texto) {
 		enviar_broadcast_game (nick_global);
 	}
 	
+	/* Programar el cambio de nick en todas las ventanas de juego */
+	update_local_nick ();
+	
 	/* Eliminar esta ventana de texto */
 	eliminar_inputbox (ib);
 }

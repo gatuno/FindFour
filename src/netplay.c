@@ -611,8 +611,36 @@ void enviar_res_syn (Juego *juego, const char *nick) {
 	juego->last_response = SDL_GetTicks ();
 	
 	//printf ("Envie un RES_SYN. Estoy listo para jugar. Mi local prot: %i\n", juego->local);
-	
+	juego->resend_nick = 0;
+	juego->wait_nick_ack = 0;
 	juego->estado = NET_READY;
+}
+
+void enviar_syn_nick (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	/* Rellenar con la firma del protocolo FF */
+	buffer_send[0] = buffer_send[1] = 'F';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_SYN_NICK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	strncpy (&buffer_send[8], nick_global, sizeof (char) * NICK_SIZE);
+	buffer_send[7 + NICK_SIZE] = '\0';
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	
+	juego->resend_nick = 0;
+	juego->wait_nick_ack = 1;
 }
 
 void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
@@ -643,6 +671,11 @@ void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 	//printf ("Envié un movimiento.\n");
 	
 	juego->estado = NET_WAIT_ACK;
+	
+	/* Si cuando se manda un movimiento, está pendiente un cambio de nick, enviarlo ahora */
+	if (juego->resend_nick || juego->wait_nick_ack) {
+		enviar_syn_nick (juego);
+	}
 }
 
 void enviar_mov_ack (Juego *juego) {
@@ -801,6 +834,31 @@ void enviar_keep_alive_ack (Juego *juego) {
 	//printf ("Respondí con un Keep Alive ACK\n");
 }
 
+void enviar_syn_nick_ack (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	
+	/* Rellenar con la firma del protocolo FF */
+	buffer_send[0] = buffer_send[1] = 'F';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_SYN_NICK_ACK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	//printf ("Respondí con un SYN Nick ACK\n");
+}
+
 int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	uint16_t temp;
 	
@@ -857,7 +915,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		msg->nick[NICK_SIZE - 1] = 0;
 		
 		/* Copiar quién empieza */
-		msg->initial = buffer[8 + NICK_SIZE];
+		//msg->initial = buffer[8 + NICK_SIZE];
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
 			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
@@ -947,6 +1005,34 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		memcpy (&temp, &buffer[6], sizeof (temp));
 		msg->remote = ntohs (temp);
 	} else if (msg->type == TYPE_KEEP_ALIVE_ACK) {
+		if (len < 8) return -1;
+		
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+	} else if (msg->type == TYPE_SYN_NICK) {
+		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
+		
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+		}
+	} else if (msg->type == TYPE_SYN_NICK_ACK) {
 		if (len < 8) return -1;
 		
 		/* Copiar el puerto local */
@@ -1155,6 +1241,13 @@ void process_netevent (void) {
 		} else if (message.type == TYPE_KEEP_ALIVE) {
 			/* Keep alive en cualquier momento se responde con Keep Alive ACK */
 			enviar_keep_alive_ack (juego);
+		} else if (message.type == TYPE_SYN_NICK) {
+			/* Si se recibe un cambio de nick en cualquier momento se recibe y se actualiza */
+			enviar_syn_nick_ack (juego);
+			
+			recibir_nick (juego, message.nick);
+		} else if (message.type == TYPE_SYN_NICK_ACK) {
+			juego->wait_nick_ack = 0;
 		} else if ((message.type == TYPE_RES_SYN && juego->estado != NET_SYN_SENT) ||
 		    (message.type == TYPE_TRN && (juego->estado != NET_READY && juego->estado != NET_WAIT_ACK)) ||
 		    (message.type == TYPE_TRN_ACK && juego->estado != NET_WAIT_ACK) ||

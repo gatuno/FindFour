@@ -76,6 +76,10 @@ typedef struct _Juego {
 	int num_a;
 	Anim animaciones[4];
 	
+	/* Para re-sincronizar el nick */
+	int resend_nick;
+	int wait_nick_ack;
+	
 	struct _Juego *next;
 } Juego;
 
@@ -86,6 +90,7 @@ void eliminar_juego (Juego *);
 void recibir_movimiento (Juego *, int turno, int col, int fila);
 void buscar_ganador (Juego *j);
 void recibir_nick (Juego *, const char *);
+void update_local_nick (void);
 
 #endif /* __JUEGO_H__ */
 

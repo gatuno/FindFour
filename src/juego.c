@@ -71,6 +71,18 @@ Juego *get_game_list (void) {
 	return network_game_list;
 }
 
+void update_local_nick (void) {
+	Juego *j;
+	
+	j = network_game_list;
+	while (j != NULL) {
+		/* Dejar el envio del nick hasta que se envie un movimiento */
+		j->resend_nick = 1;
+		juego_dibujar_tablero (j);
+		j = j->next;
+	}
+}
+
 void juego_first_time_draw (Juego  *j) {
 	SDL_Surface *surface;
 	SDL_Rect rect;
@@ -244,6 +256,10 @@ Juego *crear_juego (int top_window) {
 	
 	/* Para la animación */
 	j->num_a = 0;
+	
+	/* Para resincronizar el nick */
+	j->resend_nick = 0;
+	j->wait_nick_ack = 0;
 	
 	/* Vaciar el tablero */
 	memset (j->tablero, 0, sizeof (int[6][7]));
@@ -882,6 +898,7 @@ void recibir_nick (Juego *j, const char *nick) {
 	SDL_Color negro;
 	SDL_Rect rect;
 	SDL_Surface *surface;
+	int first_time = 0;
 	
 	memcpy (j->nick_remoto, nick, sizeof (j->nick_remoto));
 	
@@ -890,14 +907,24 @@ void recibir_nick (Juego *j, const char *nick) {
 	/* Renderizar el nick del otro jugador */
 	blanco.r = blanco.g = blanco.b = 255;
 	negro.r = negro.g = negro.b = 0;
+	if (j->nick_remoto_image != NULL) {
+		SDL_FreeSurface (j->nick_remoto_image);
+	} else {
+		first_time = 1;
+	}
 	j->nick_remoto_image = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
 	
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xFF;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
+	if (j->nick_remoto_image_blue != NULL) {
+		SDL_FreeSurface (j->nick_remoto_image_blue);
+	}
 	j->nick_remoto_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
 	
-	/* Quitar el timer */
-	window_disable_timer (j->ventana);
+	/* Quitar el timer solo si es la primera vez que recibo el nick */
+	if (first_time == 1) {
+		window_disable_timer (j->ventana);
+	}
 	
 	/* Borrar con el fondo */
 	rect.x = 39;
