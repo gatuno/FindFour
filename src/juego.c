@@ -204,13 +204,11 @@ int juego_timer_callback_anim (Ventana *v) {
 			SDL_BlitSurface (images[i],  NULL, surface, &rect);
 		}
 		
-		if (j->win != 0 || j->turno == 42) {
-			if (j->win == 1) {
-				// Somos ganadores
-				message_add (MSG_NORMAL, "Ok", "Has ganado la partida");
-			} else if (j->turno == 42) {
-				message_add (MSG_NORMAL, "Ok", "%s y tú han empatado", j->nick_remoto);
-			}
+		if (j->win != 0 && (j->win - 1) == j->inicio) {
+			// Somos ganadores
+			message_add (MSG_NORMAL, "Ok", "Has ganado la partida");
+		} else if (j->turno == 42) {
+			message_add (MSG_NORMAL, "Ok", "%s y tú han empatado", j->nick_remoto);
 		}
 		return FALSE;
 	}
@@ -519,7 +517,11 @@ void juego_dibujar_tablero (Juego *j) {
 	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
 	window_update (j->ventana, &rect);
 	
-	SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
+	if (j->win != 0 || j->turno == 42) {
+		SDL_BlitSurface (((j->turno - 1) % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
+	} else {
+		SDL_BlitSurface ((j->turno % 2) == j->inicio ? nick_image : nick_image_blue, NULL, surface, &rect);
+	}
 	
 	/* Borrar el texto de "conectando" */
 	rect.x = 74;
@@ -536,7 +538,11 @@ void juego_dibujar_tablero (Juego *j) {
 	rect.w = j->nick_remoto_image->w;
 	rect.h = j->nick_remoto_image->h;
 	
-	SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
+	if (j->win != 0 || j->turno == 42) {
+		SDL_BlitSurface (((j->turno - 1) % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
+	} else {
+		SDL_BlitSurface ((j->turno % 2) != j->inicio ? j->nick_remoto_image : j->nick_remoto_image_blue, NULL, surface, &rect);
+	}
 }
 
 int juego_mouse_motion (Ventana *v, int x, int y) {
