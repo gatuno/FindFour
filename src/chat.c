@@ -646,7 +646,10 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 	
 	while (nuevo != NULL) {
 		if (sockaddr_cmp (direccion, (struct sockaddr *) &(nuevo->cliente)) == 0) {
-			SDL_FreeSurface (nuevo->nick_chat);
+			/* Actualizar el "last_seen" */
+			nuevo->last_seen = SDL_GetTicks();
+			
+			if (strcmp (nuevo->nick, nick) == 0) return;
 			
 			/* Actualizar con el nuevo nombre */
 			strncpy (nuevo->nick, nick, NICK_SIZE);
@@ -661,10 +664,16 @@ void buddy_list_mcast_add (const char *nick, struct sockaddr *direccion, socklen
 			} else {
 				sprintf (buffer, "%s [???]", nick);
 			}
+			SDL_FreeSurface (nuevo->nick_chat);
 			nuevo->nick_chat = TTF_RenderUTF8_Blended (ttf14_facefront, buffer, blanco);
 			
-			/* Actualizar el "last_seen" */
-			nuevo->last_seen = SDL_GetTicks();
+			/* Programar el redibujado de los nicks */
+			if (static_chat->list_display == CHAT_LIST_MCAST) {
+				for (g = 0; g < 8; g++) {
+					chat_button_frame (static_chat->ventana, CHAT_BUTTON_BUDDY_1 + g, static_chat->buddys_frame[g]);
+				}
+			}
+			
 			return;
 		}
 		nuevo = nuevo->next;

@@ -156,6 +156,7 @@ int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
 
 static InputBox *connect_window;
+static InputBox *change_nick_window;
 
 int server_port;
 char nick_global[NICK_SIZE];
@@ -213,6 +214,7 @@ void change_nick (InputBox *ib, const char *texto) {
 	
 	/* Eliminar esta ventana de texto */
 	eliminar_inputbox (ib);
+	change_nick_window = NULL;
 }
 
 void late_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
@@ -269,6 +271,10 @@ void cancelar_conexion (InputBox *ib, const char *texto) {
 	connect_window = NULL;
 }
 
+void cancelar_change_nick (InputBox *ib, const char *texto) {
+	change_nick_window = NULL;
+}
+
 int findfour_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 	if (key->keysym.sym == SDLK_F5) {
 		if (connect_window != NULL) {
@@ -280,6 +286,12 @@ int findfour_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 		}
 	} else if (key->keysym.sym == SDLK_F8) {
 		show_chat ();
+	} else if (key->keysym.sym == SDLK_F7) {
+		if (change_nick_window != NULL) {
+			window_raise (change_nick_window->ventana);
+		} else {
+			change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, cancelar_change_nick);
+		}
 	}
 	
 	return TRUE;
@@ -344,7 +356,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, NULL);
+		change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, cancelar_change_nick);
 	}
 	
 	SDL_Flip (screen);
