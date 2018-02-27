@@ -1,0 +1,9 @@
+# List of source files which contain translatable strings.
+src/background.c
+src/chat.c
+src/findfour.c
+src/inputbox.c
+src/juego.c
+src/netplay.c
+src/stun.c
+src/ventana.c

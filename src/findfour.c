@@ -47,6 +47,10 @@
 #include "config.h"
 #endif
 
+#include <locale.h>
+#include "gettext.h"
+#define _(string) gettext (string)
+
 #include "path.h"
 
 #include "ventana.h"
@@ -219,7 +223,7 @@ void change_nick (InputBox *ib, const char *texto) {
 
 void late_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
 	if (res == NULL) {
-		message_add (MSG_ERROR, "OK", "Error al resolver nombre '%s':\n%s", hostname, errstr);
+		message_add (MSG_ERROR, _("OK"), _("Error resolving the hostname '%s':\n%s"), hostname, errstr);
 		return;
 	}
 	
@@ -282,7 +286,7 @@ int findfour_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 			window_raise (connect_window->ventana);
 		} else {
 			/* Crear un input box para conectar */
-			connect_window = crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "", cancelar_conexion);
+			connect_window = crear_inputbox ((InputBoxFunc) nueva_conexion, _("Hostname or direction to connect:"), "", cancelar_conexion);
 		}
 	} else if (key->keysym.sym == SDLK_F8) {
 		show_chat ();
@@ -290,7 +294,7 @@ int findfour_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 		if (change_nick_window != NULL) {
 			window_raise (change_nick_window->ventana);
 		} else {
-			change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, cancelar_change_nick);
+			change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, _("Please choose a nickname:"), nick_global, cancelar_change_nick);
 		}
 	}
 	
@@ -304,13 +308,18 @@ int main (int argc, char *argv[]) {
 	
 	initSystemPaths (argv[0]);
 	
+	setlocale (LC_ALL, "");
+	bindtextdomain (PACKAGE, l10n_path);
+	
+	textdomain (PACKAGE);
+	
 	memset (nick_global, 0, sizeof (nick_global));
 	
 	setup ();
 	
 	/* Generar o leer el nick del archivo de configuración */
 	r = RANDOM (65536);
-	sprintf (nick_global, "Player%i", r);
+	sprintf (nick_global, _("Player %i"), r);
 	render_nick ();
 	
 	nick_default = 1;
@@ -345,7 +354,7 @@ int game_loop (void) {
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
 	
 	if (findfour_netinit (server_port) < 0) {
-		fprintf (stderr, "Falló al inicializar la red\n");
+		fprintf (stderr, _("Failed to init network\n"));
 		
 		return GAME_QUIT;
 	}
@@ -356,7 +365,7 @@ int game_loop (void) {
 	inicializar_chat ();
 	
 	if (nick_default) {
-		change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, "Ingrese su nombre de jugador:", nick_global, cancelar_change_nick);
+		change_nick_window = crear_inputbox ((InputBoxFunc) change_nick, _("Please choose a nickname:"), nick_global, cancelar_change_nick);
 	}
 	
 	SDL_Flip (screen);
@@ -430,9 +439,9 @@ void setup (void) {
 	/* Inicializar el Video SDL */
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		fprintf (stderr,
-			"Error: Can't initialize the video subsystem\n"
+			_("Error: Can't initialize the video subsystem\n"
 			"The error returned by SDL is:\n"
-			"%s\n", SDL_GetError());
+			"%s\n"), SDL_GetError());
 		exit (1);
 	}
 	
@@ -442,24 +451,24 @@ void setup (void) {
 		SDL_WM_SetIcon (image, NULL);
 		SDL_FreeSurface (image);
 	}
-	SDL_WM_SetCaption ("Find Four", "Find Four");
+	SDL_WM_SetCaption (_("Find Four"), _("Find Four"));
 	
 	/* Crear la pantalla de dibujado */
 	screen = set_video_mode (0);
 	
 	if (screen == NULL) {
 		fprintf (stderr,
-			"Error: Can't setup 760x480 video mode.\n"
+			_("Error: Can't setup 760x480 video mode.\n"
 			"The error returned by SDL is:\n"
-			"%s\n", SDL_GetError());
+			"%s\n"), SDL_GetError());
 		exit (1);
 	}
 	
 	use_sound = 1;
 	if (SDL_InitSubSystem (SDL_INIT_AUDIO) < 0) {
 		fprintf (stdout,
-			"Warning: Can't initialize the audio subsystem\n"
-			"Continuing...\n");
+			_("Warning: Can't initialize the audio subsystem\n"
+			"Continuing...\n"));
 		use_sound = 0;
 	}
 	
@@ -467,7 +476,7 @@ void setup (void) {
 		/* Inicializar el sonido */
 		if (Mix_OpenAudio (22050, AUDIO_S16, 2, 4096) < 0) {
 			fprintf (stdout,
-				"Warning: Can't initialize the SDL Mixer library\n");
+				_("Warning: Can't initialize the SDL Mixer library\n"));
 			use_sound = 0;
 		} else {
 			Mix_AllocateChannels (3);
@@ -480,10 +489,10 @@ void setup (void) {
 		
 		if (image == NULL) {
 			fprintf (stderr,
-				"Failed to load data file:\n"
+				_("Failed to load data file:\n"
 				"%s\n"
 				"The error returned by SDL is:\n"
-				"%s\n", buffer_file, SDL_GetError());
+				"%s\n"), buffer_file, SDL_GetError());
 			SDL_Quit ();
 			exit (1);
 		}
@@ -499,10 +508,10 @@ void setup (void) {
 			
 			if (sounds[g] == NULL) {
 				fprintf (stderr,
-					"Failed to load data file:\n"
+					_("Failed to load data file:\n"
 					"%s\n"
 					"The error returned by SDL is:\n"
-					"%s\n", buffer_file, SDL_GetError ());
+					"%s\n"), buffer_file, SDL_GetError ());
 				SDL_Quit ();
 				exit (1);
 			}
@@ -513,8 +522,8 @@ void setup (void) {
 	/* Cargar las tipografias */
 	if (TTF_Init () < 0) {
 		fprintf (stderr,
-			"Error: Can't initialize the SDL TTF library\n"
-			"%s\n", TTF_GetError ());
+			_("Error: Can't initialize the SDL TTF library\n"
+			"%s\n"), TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
@@ -524,9 +533,9 @@ void setup (void) {
 	
 	if (!ttf16_burbank_medium) {
 		fprintf (stderr,
-			"Failed to load font file 'Burbank Medium Bold'\n"
+			_("Failed to load font file 'Burbank Medium Bold'\n"
 			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
+			"%s\n"), TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
@@ -535,9 +544,9 @@ void setup (void) {
 	ttf14_facefront = TTF_OpenFont (buffer_file, 14);
 	if (!ttf14_facefront) {
 		fprintf (stderr,
-			"Failed to load font file 'CC Face Front'\n"
+			_("Failed to load font file 'CC Face Front'\n"
 			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
+			"%s\n"), TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
@@ -546,9 +555,9 @@ void setup (void) {
 	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
 	if (!ttf16_comiccrazy) {
 		fprintf (stderr,
-			"Failed to load font file 'Comic Crazy'\n"
+			_("Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
+			"%s\n"), TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
@@ -557,9 +566,9 @@ void setup (void) {
 	ttf20_comiccrazy = TTF_OpenFont (buffer_file, 20);
 	if (!ttf20_comiccrazy) {
 		fprintf (stderr,
-			"Failed to load font file 'Comic Crazy'\n"
+			_("Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
+			"%s\n"), TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
@@ -567,7 +576,7 @@ void setup (void) {
 	/* Dibujar el texto de "Esperando jugador" */
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
-	text_waiting = draw_text_with_shadow (ttf16_comiccrazy, 2, "Connecting...", blanco, negro);
+	text_waiting = draw_text_with_shadow (ttf16_comiccrazy, 2, _("Connecting..."), blanco, negro);
 	
 	setup_background ();
 	srand (SDL_GetTicks ());

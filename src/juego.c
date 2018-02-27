@@ -25,6 +25,13 @@
 #include <SDL_ttf.h>
 #include <SDL_mixer.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "gettext.h"
+#define _(string) gettext (string)
+
 /* Para el manejo de la red */
 #ifdef __MINGW32__
 #	include <winsock2.h>
@@ -218,9 +225,9 @@ int juego_timer_callback_anim (Ventana *v) {
 		
 		if (j->win != 0 && (j->win - 1) == j->inicio) {
 			// Somos ganadores
-			message_add (MSG_NORMAL, "Ok", "Has ganado la partida");
+			message_add (MSG_NORMAL, _("Ok"), _("You won"));
 		} else if (j->turno == 42) {
-			message_add (MSG_NORMAL, "Ok", "%s y tú han empatado", j->nick_remoto);
+			message_add (MSG_NORMAL, _("Ok"), _("%s and you have tied"), j->nick_remoto);
 		}
 		return FALSE;
 	}
@@ -802,17 +809,17 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 				enviar_mov_ack (j);
 			}
 		} else {
-			printf ("Número de turno equivocado\n");
+			fprintf (stderr, "Wrong turn number\n");
 			j->last_fin = NET_DISCONNECT_WRONG_TURN;
 			goto fin_and_close;
 		}
 	} else if (j->turno % 2 == j->inicio) {
-		printf ("Es nuestro turno, cerrar esta conexión\n");
+		fprintf (stderr, "It's our turn, closing the connection\n");
 		j->last_fin = NET_DISCONNECT_WRONG_TURN;
 		goto fin_and_close;
 	} else if (j->tablero[0][col] != 0) {
 		/* Tablero lleno, columna equivocada */
-		printf ("Columna llena, no deberias poner fichas ahí\n");
+		fprintf (stderr, "Wrong movement\n");
 		j->last_fin = NET_DISCONNECT_WRONG_MOV;
 		goto fin_and_close;
 	} else {
@@ -821,7 +828,7 @@ void recibir_movimiento (Juego *j, int turno, int col, int fila) {
 	
 		/* Poner la ficha en la posición [g][turno] y avanzar turno */
 		if (g != fila) {
-			printf ("La ficha de mi lado cayó en la fila incorrecta\n");
+			fprintf (stderr, "Wrong movement - Out of sync\n");
 			j->last_fin = NET_DISCONNECT_WRONG_MOV;
 			goto fin_and_close;
 		} else {

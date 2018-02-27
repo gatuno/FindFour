@@ -24,6 +24,13 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "gettext.h"
+#define _(string) gettext (string)
+
 #include "utf8.h"
 
 #include "findfour.h"
@@ -420,7 +427,7 @@ InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, 
 	}
 	
 	if (strcmp (ask, "") == 0) {
-		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, "(Sin texto)", blanco);
+		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, _("(No text)"), blanco);
 	} else {
 		ib->text_ask = TTF_RenderUTF8_Blended (ttf16_burbank_medium, ask, blanco);
 	}

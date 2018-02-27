@@ -34,6 +34,9 @@
 #endif
 #include <sys/types.h>
 
+#include "gettext.h"
+#define _(string) gettext (string)
+
 #include "stun.h"
 #include "netplay.h"
 #include "resolv.h"
@@ -223,7 +226,7 @@ void parse_stun_message (const char *buffer, int buffer_len) {
 #else
 		inet_ntop (AF_INET, &sin_addr, ip_addr, sizeof (ip_addr));
 #endif
-		message_add (MSG_NORMAL, "Ok", "¡Felicidades!\nSe ha detectado que puedes jugar en linea\nTu dirección IP es: %s\n", ip_addr);
+		message_add (MSG_NORMAL, _("Ok"), _("Congratulations!\nIt has been detected that you can play online. You can share your network address: %s\n"), ip_addr);
 	}
 }
 

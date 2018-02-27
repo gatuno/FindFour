@@ -29,6 +29,13 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "gettext.h"
+#define _(string) gettext (string)
+
 #include "findfour.h"
 #include "ventana.h"
 #include "path.h"
@@ -83,7 +90,7 @@ void setup_background (void) {
 	background_images = (SDL_Surface **) malloc (sizeof (SDL_Surface *) * top);
 	if (background_images == NULL) {
 		fprintf (stderr,
-			"Failed to reserve memory\n");
+			_("Failed to reserve memory\n"));
 		SDL_Quit ();
 		exit (1);
 	}
@@ -94,10 +101,10 @@ void setup_background (void) {
 		
 		if (image == NULL) {
 			fprintf (stderr,
-				"Failed to load data file:\n"
+				_("Failed to load data file:\n"
 				"%s\n"
 				"The error returned by SDL is:\n"
-				"%s\n", buffer_file, SDL_GetError());
+				"%s\n"), buffer_file, SDL_GetError());
 			SDL_Quit ();
 			exit (1);
 		}

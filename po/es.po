@@ -1,0 +1,186 @@
+# Spanish translations for findfour package.
+# Copyright (C) 2018 Free Software Foundation, Inc.
+# This file is distributed under the same license as the findfour package.
+# FÃ©lix Arreola RodrÃ­guez <apt@gatuno.mx>, 2018.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: findfour 0.8.5\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2018-02-24 23:36-0600\n"
+"PO-Revision-Date: 2018-02-24 23:31-0600\n"
+"Last-Translator: Félix Arreola Rodríguez <apt@gatuno.mx>\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 1.6.10\n"
+
+#: src/background.c:93
+#, c-format
+msgid "Failed to reserve memory\n"
+msgstr ""
+
+#: src/background.c:104 src/findfour.c:492 src/findfour.c:511
+#, c-format
+msgid ""
+"Failed to load data file:\n"
+"%s\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/chat.c:99
+msgid "Local network"
+msgstr "Red local"
+
+#: src/chat.c:104
+msgid "Recent"
+msgstr "Partidas recientes"
+
+#: src/findfour.c:226
+msgid "OK"
+msgstr "OK"
+
+#: src/findfour.c:226
+#, c-format
+msgid ""
+"Error resolving the hostname '%s':\n"
+"%s"
+msgstr ""
+"Error al resolver el nombre de equipo '%s':\n"
+"%s"
+
+#: src/findfour.c:289
+msgid "Hostname or direction to connect:"
+msgstr "Nombre de equipo o dirección a conectar:"
+
+#: src/findfour.c:297 src/findfour.c:368
+msgid "Please choose a nickname:"
+msgstr "Por favor elija un nombre de jugador:"
+
+#: src/findfour.c:322
+#, c-format
+msgid "Player %i"
+msgstr "Jugador %i"
+
+#: src/findfour.c:357
+#, c-format
+msgid "Failed to init network\n"
+msgstr "Falló al inicializar la red\n"
+
+#: src/findfour.c:442
+#, c-format
+msgid ""
+"Error: Can't initialize the video subsystem\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:454
+msgid "Find Four"
+msgstr "Conecta 4"
+
+#: src/findfour.c:461
+#, c-format
+msgid ""
+"Error: Can't setup 760x480 video mode.\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:470
+#, c-format
+msgid ""
+"Warning: Can't initialize the audio subsystem\n"
+"Continuing...\n"
+msgstr ""
+
+#: src/findfour.c:479
+#, c-format
+msgid "Warning: Can't initialize the SDL Mixer library\n"
+msgstr ""
+
+#: src/findfour.c:525
+#, c-format
+msgid ""
+"Error: Can't initialize the SDL TTF library\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:536
+#, c-format
+msgid ""
+"Failed to load font file 'Burbank Medium Bold'\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:547
+#, c-format
+msgid ""
+"Failed to load font file 'CC Face Front'\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:558 src/findfour.c:569
+#, c-format
+msgid ""
+"Failed to load font file 'Comic Crazy'\n"
+"The error returned by SDL is:\n"
+"%s\n"
+msgstr ""
+
+#: src/findfour.c:579
+msgid "Connecting..."
+msgstr "Conectando..."
+
+#: src/inputbox.c:430
+msgid "(No text)"
+msgstr "(Sin texto)"
+
+#: src/juego.c:228 src/juego.c:230 src/netplay.c:1236 src/netplay.c:1238
+#: src/stun.c:229
+msgid "Ok"
+msgstr "Ok"
+
+#: src/juego.c:228
+msgid "You won"
+msgstr "Has ganado"
+
+#: src/juego.c:230
+#, c-format
+msgid "%s and you have tied"
+msgstr "%s y tú han empatado"
+
+#: src/netplay.c:904 src/netplay.c:924 src/netplay.c:996 src/netplay.c:1036
+msgid "No name"
+msgstr "Sin nombre"
+
+#: src/netplay.c:1236
+#, c-format
+msgid "%s has closed the game"
+msgstr "%s ha cerrado el juego"
+
+#: src/netplay.c:1238
+#, c-format
+msgid ""
+"The game has been closed\n"
+"Err: %i"
+msgstr ""
+"El juego ha sido cerrado\n"
+"Err: %i"
+
+#: src/stun.c:229
+#, c-format
+msgid ""
+"Congratulations!\n"
+"It has been detected that you can play online. You can share your network "
+"address: %s\n"
+msgstr ""
+"¡Felicidades!\n"
+"Se ha detectado que puedes jugar en linea. Puedes compartir tu dirección de "
+"red: %s\n"

@@ -25,6 +25,13 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "gettext.h"
+#define _(string) gettext (string)
+
 /* Para el manejo de red */
 #ifdef __MINGW32__
 #	include <winsock2.h>
@@ -89,12 +96,12 @@ void inicializar_chat (void) {
 	/* La lista de jugadores multicast locales */
 	c->buddy_mcast = NULL;
 	c->buddy_mcast_count = 0;
-	c->mcast_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, "Red local", color);
+	c->mcast_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, _("Local network"), color);
 	
 	/* La lista de jugadores recientes */
 	c->buddy_recent = NULL;
 	c->buddy_recent_count = 0;
-	c->recent_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, "Recientes", color);
+	c->recent_text = TTF_RenderUTF8_Blended (ttf16_comiccrazy, _("Recent"), color);
 	
 	/* Cuál de las listas se despliega */
 	c->list_display = CHAT_LIST_MCAST;

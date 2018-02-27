@@ -268,7 +268,7 @@ void window_register_timer_events (Ventana *v, FindWindowTimerCallback cb) {
 
 void window_register_buttons (Ventana *v, int count, FindWindowButtonFrameChange frame, FindWindowButtonEvent event) {
 	if (v->button_start != 0) {
-		printf ("Advertencia, la ventana ya tiene registrados botones, ignorando\n");
+		fprintf (stderr, "Warning: The window already registered a list of buttons\n");
 		return;
 	}
 	
@@ -545,6 +545,7 @@ void window_manager_event (SDL_Event event) {
 				/* Mover la ventana a las coordenadas del mouse - los offsets */
 				drag->coords.x = event.motion.x - drag_x;
 				drag->coords.y = event.motion.y - drag_y;
+				window_flip (drag);
 			} else {
 				manejado = FALSE;
 				
@@ -581,6 +582,10 @@ void window_manager_event (SDL_Event event) {
 			break;
 		case SDL_MOUSEBUTTONUP:
 			if (event.button.button != SDL_BUTTON_LEFT) break;
+			
+			if (drag != NULL) {
+				window_flip (drag);
+			}
 			drag = NULL;
 			manejado = FALSE;
 			

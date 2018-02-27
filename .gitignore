@@ -43,3 +43,7 @@ po/stamp-po
 *.mo
 
 etc/Info.plist
+
+*~
+
+m4

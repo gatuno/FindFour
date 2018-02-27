@@ -16,7 +16,8 @@ findfour_SOURCES = findfour.c findfour.h \
 	background.c background.h \
 	resolv.c resolv.h \
 	ventana.c ventana.h \
-	sdl2_rect.c sdl2_rect.h
+	sdl2_rect.c sdl2_rect.h \
+	gettext.h
 
 if MACOSX
 findfour_SOURCES += SDLMain.m SDLMain.h
@@ -37,10 +38,11 @@ findfour_CPPFLAGS = -DGAMEDATA_DIR=\"$(gamedatadir)/\" -DLOCALEDIR=\"$(localedir
 findfour_CFLAGS = $(SDL_CFLAGS) $(SDL_image_CFLAGS) $(SDL_mixer_CFLAGS) $(SDL_ttf_CFLAGS) $(AM_CFLAGS)
 if MACOSX
 # En MAC OS X, hay que ligar/compilar contra los frameworks
-findfour_LDFLAGS = -Wl,-rpath,@loader_path/../Frameworks
+findfour_LDFLAGS = -Wl,-rpath,@loader_path/../Frameworks  $(AM_LDFLAGS)
 else
 findfour_LDADD = $(SDL_LIBS) $(SDL_image_LIBS) $(SDL_mixer_LIBS) $(SDL_ttf_LIBS) $(mingw_ldadd)
 endif
+LDADD = $(LIBINTL)
 
 #------------------ Packaging rules for Mac OSX ------------------------
 

@@ -54,6 +54,9 @@
 #include "config.h"
 #endif
 
+#include "gettext.h"
+#define _(string) gettext (string)
+
 #if HAVE_GETIFADDRS
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -129,7 +132,7 @@ int findfour_try_netinit4 (int puerto) {
 	fd = socket (AF_INET, SOCK_DGRAM, 0);
 	
 	if (fd == INVALID_SOCKET) {
-		printf ("Error al crear socket AF_INET\n");
+		fprintf (stderr, "Failed to create AF_INET socket\n");
 		return -1;
 	}
 	
@@ -141,7 +144,7 @@ int findfour_try_netinit4 (int puerto) {
 	sprintf (buff_p, "%i", puerto);
 	
 	if (getaddrinfo (NULL, buff_p, &hints, &resultados) < 0) {
-		printf ("WSA Error: %i\n", WSAGetLastError());
+		fprintf (stderr, "WSA Error: %i\n", WSAGetLastError());
 		close (fd);
 		return -1;
 	}
@@ -149,8 +152,8 @@ int findfour_try_netinit4 (int puerto) {
 	/* Asociar el socket con el puerto */
 	if (bind (fd, resultados->ai_addr, resultados->ai_addrlen) < 0) {
 		/* Mostrar ventana de error */
-		printf ("WSA Error: %i\n", WSAGetLastError());
-		printf ("Error de bind\n");
+		fprintf (stderr, "WSA Error: %i\n", WSAGetLastError());
+		fprintf (stderr, "Bind error\n");
 		return -1;
 	}
 	
@@ -170,8 +173,8 @@ int findfour_try_netinit4 (int puerto) {
 	mcast_req.imr_interface.s_addr = INADDR_ANY;
 	
 	if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mcast_req, sizeof(mcast_req)) < 0) {
-		printf ("WSA Error: %i\n", WSAGetLastError());
-		printf ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast\n");
+		fprintf (stderr, "WSA Error: %i\n", WSAGetLastError());
+		fprintf (stderr, "Error executing IPv4 ADD_MEMBERSHIP Multicast\n");
 	}
 	
 	g = 0;
@@ -192,7 +195,7 @@ int findfour_try_netinit6 (int puerto) {
 	fd = socket (AF_INET6, SOCK_DGRAM, 0);
 	
 	if (fd == INVALID_SOCKET) {
-		printf ("Error al crear socket AF_INET6\n");
+		fprintf (stderr, "Failed to create AF_INET6 socket\n");
 		return -1;
 	}
 	
@@ -215,8 +218,8 @@ int findfour_try_netinit6 (int puerto) {
 	/* Asociar el socket con el puerto */
 	if (bind (fd, resultados->ai_addr, resultados->ai_addrlen) < 0) {
 		/* Mostrar ventana de error */
-		printf ("WSA Error: %i\n", WSAGetLastError());
-		printf ("Error de bind\n");
+		fprintf (stderr, "WSA Error: %i\n", WSAGetLastError());
+		fprintf (stderr, "Bind error\n");
 		return -1;
 	}
 	
@@ -237,8 +240,8 @@ int findfour_try_netinit6 (int puerto) {
 	mcast_req6.ipv6mr_interface = 0;
 	
 	if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, (char *)&mcast_req6, sizeof(mcast_req6)) < 0) {
-		printf ("WSA Error: %i\n", WSAGetLastError());
-		printf ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast\n");
+		fprintf (stderr, "WSA Error: %i\n", WSAGetLastError());
+		fprintf (stderr, "Error executing IPv6 IPV6_ADD_MEMBERSHIP Multicast\n");
 	}
 	
 	h = 0;
@@ -341,7 +344,7 @@ int findfour_try_netinit4 (int puerto) {
 	
 	freeaddrinfo (ressave);
 	if (resultados == NULL) {
-		fprintf (stderr, "Ningún bind hizo efecto\n");
+		fprintf (stderr, "Bind error\n");
 		close (fd);
 		return -1;
 	}
@@ -377,7 +380,7 @@ int findfour_try_netinit4 (int puerto) {
 				mcast_req.imr_interface.s_addr = sa->sin_addr.s_addr;
 				
 				if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
-					perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
+					perror ("Error executing IPv4 ADD_MEMBERSHIP Multicast");
 				}
 			}
 		}
@@ -389,7 +392,7 @@ int findfour_try_netinit4 (int puerto) {
 	mcast_req.imr_interface.s_addr = INADDR_ANY;
 	
 	if (setsockopt (fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mcast_req, sizeof(mcast_req)) < 0) {
-		perror ("Error al hacer ADD_MEMBERSHIP IPv4 Multicast");
+		perror ("Error executing IPv4 ADD_MEMBERSHIP Multicast");
 	}
 #if HAVE_GETIFADDRS
 	}
@@ -445,7 +448,7 @@ int findfour_try_netinit6 (int puerto) {
 	
 	freeaddrinfo (ressave);
 	if (resultados == NULL) {
-		fprintf (stderr, "Ningún bind hizo efecto v6\n");
+		fprintf (stderr, "Bind error on IPv6\n");
 		close (fd);
 		return -1;
 	}
@@ -479,7 +482,7 @@ int findfour_try_netinit6 (int puerto) {
 				
 				if (mcast_req6.ipv6mr_interface != 0) {
 					if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
-						perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
+						perror ("Error executing IPv6 IPV6_ADD_MEMBERSHIP Multicast");
 					}
 				}
 			}
@@ -491,7 +494,7 @@ int findfour_try_netinit6 (int puerto) {
 	mcast_req6.ipv6mr_interface = 0; /* Cualquier interfaz */
 	
 	if (setsockopt (fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mcast_req6, sizeof(mcast_req6)) < 0) {
-		perror ("Error al hacer IPV6_ADD_MEMBERSHIP IPv6 Multicast");
+		perror ("Error executing IPv6 IPV6_ADD_MEMBERSHIP Multicast");
 	}
 #if HAVE_GETIFADDRS
 	}
@@ -868,13 +871,13 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	if (len < 4) return -1;
 	
 	if (buffer[0] != 'F' || buffer[1] != 'F') {
-		printf ("Protocol Mismatch!\n");
+		fprintf (stderr, "Protocol Mismatch!\n");
 		
 		return -1;
 	}
 	
 	if (buffer[2] != 2) {
-		printf ("Version mismatch. Expecting 2\n");
+		fprintf (stderr, "Version mismatch. Expecting 2\n");
 		
 		return -1;
 	}
@@ -898,7 +901,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
 		}
 	} else if (msg->type == TYPE_RES_SYN) {
 		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
@@ -918,7 +921,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		//msg->initial = buffer[8 + NICK_SIZE];
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
 		}
 	} else if (msg->type == TYPE_TRN) {
 		if (len < 11) return -1;
@@ -990,7 +993,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
 		}
 	} else if (msg->type == TYPE_MCAST_FIN) {
 		/* Ningún dato extra */
@@ -1030,7 +1033,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, "--NICK--", sizeof (char) * NICK_SIZE);
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
 		}
 	} else if (msg->type == TYPE_SYN_NICK_ACK) {
 		if (len < 8) return -1;
@@ -1156,7 +1159,7 @@ void process_netevent (void) {
 		}
 		
 		if (unpack (&message, buffer, len) < 0) {
-			printf ("Recibí un paquete mal estructurado\n");
+			fprintf (stderr, "Wrong packet format\n");
 			continue;
 		}
 		
@@ -1230,9 +1233,9 @@ void process_netevent (void) {
 		
 		if (message.type == TYPE_FIN) {
 			if (message.fin == NET_USER_QUIT && juego->nick_remoto[0] != 0) {
-				message_add (MSG_NORMAL, "Ok", "%s ha cerrado la partida", juego->nick_remoto);
+				message_add (MSG_NORMAL, _("Ok"), _("%s has closed the game"), juego->nick_remoto);
 			} else {
-				message_add (MSG_ERROR, "Ok", "La partida se ha cerrado\nErr: %i", message.fin);
+				message_add (MSG_ERROR, _("Ok"), _("The game has been closed\nErr: %i"), message.fin);
 			}
 			enviar_fin_ack (juego);
 			
@@ -1254,7 +1257,7 @@ void process_netevent (void) {
 		    (message.type == TYPE_TRN_ACK_GAME && juego->estado != NET_WAIT_WINNER) ||
 		    (message.type == TYPE_FIN_ACK && juego->estado != NET_WAIT_CLOSING) ||
 		    (message.type == TYPE_KEEP_ALIVE_ACK && juego->estado != NET_READY)) {
-			printf ("Paquete en el momento incorrecto\n");
+			fprintf (stderr, "Wrong packet - Out of sync\n");
 		} else if (message.type == TYPE_RES_SYN) {
 			/* Copiar el nick del otro jugador */
 			recibir_nick (juego, message.nick);
