@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: findfour 0.8.5\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-24 23:36-0600\n"
+"POT-Creation-Date: 2018-02-28 17:50-0600\n"
 "PO-Revision-Date: 2018-02-24 23:31-0600\n"
 "Last-Translator: Félix Arreola Rodríguez <apt@gatuno.mx>\n"
 "Language-Team: Spanish\n"
@@ -126,7 +126,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:558 src/findfour.c:569
+#: src/findfour.c:560
 #, c-format
 msgid ""
 "Failed to load font file 'Comic Crazy'\n"
@@ -134,7 +134,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:579
+#: src/findfour.c:583
 msgid "Connecting..."
 msgstr "Conectando..."
 

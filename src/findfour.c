@@ -551,9 +551,11 @@ void setup (void) {
 		exit (1);
 	}
 	
+	SDL_RWops *ttf_comiccrazy;
 	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
-	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
-	if (!ttf16_comiccrazy) {
+	ttf_comiccrazy = SDL_RWFromFile (buffer_file, "rb");
+	
+	if (ttf_comiccrazy == NULL) {
 		fprintf (stderr,
 			_("Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"
@@ -562,16 +564,18 @@ void setup (void) {
 		exit (1);
 	}
 	
-	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
-	ttf20_comiccrazy = TTF_OpenFont (buffer_file, 20);
-	if (!ttf20_comiccrazy) {
-		fprintf (stderr,
-			_("Failed to load font file 'Comic Crazy'\n"
-			"The error returned by SDL is:\n"
-			"%s\n"), TTF_GetError ());
+	SDL_RWseek (ttf_comiccrazy, 0, RW_SEEK_SET);
+	ttf16_comiccrazy = TTF_OpenFontRW (ttf_comiccrazy, 0, 16);
+	
+	SDL_RWseek (ttf_comiccrazy, 1, RW_SEEK_SET);
+	ttf20_comiccrazy = TTF_OpenFontRW (ttf_comiccrazy, 0, 20);
+	
+	if (!ttf16_comiccrazy || !ttf20_comiccrazy) {
 		SDL_Quit ();
 		exit (1);
 	}
+	
+	bind_textdomain_codeset (PACKAGE, "UTF-8");
 	
 	/* Dibujar el texto de "Esperando jugador" */
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
