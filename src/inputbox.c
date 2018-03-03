@@ -405,6 +405,8 @@ int inputbox_timer_callback (Ventana *v) {
 	if (ib->cursor_vel >= 24) ib->cursor_vel = 0;
 	
 	draw_inputbox_textfield (ib);
+	
+	return TRUE;
 }
 
 InputBox *crear_inputbox (InputBoxFunc func, const char *ask, const char *text, InputBoxFunc close_func) {

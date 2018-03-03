@@ -31,13 +31,16 @@
 #ifdef __MINGW32__
 #	include <winsock2.h>
 #	include <ws2tcpip.h>
+#	ifndef AI_ADDRCONFIG
+#		define AI_ADDRCONFIG 0x0400
+#	endif
 #else
 #	include <sys/socket.h>
 #	include <netinet/in.h>
 #	include <netdb.h>
+#	include <sys/wait.h>
 #endif
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 
 #include <signal.h>
@@ -159,6 +162,7 @@ static void cancel_requests (void) {
 }
 
 void destroy_resolver (void) {
+#ifdef HAVE_WORKING_FORK
 	if (forked_child > 0) {
 		kill(forked_child, SIGKILL);
 		/* Esperar al hijo muerto para hacer limpieza */
@@ -176,8 +180,8 @@ void destroy_resolver (void) {
 	close (child_out);
 	
 	cancel_requests ();
+#endif
 }
-
 /* Funciones del proceso hijo */
 static void write_to_parent(int fd, const void *buf, size_t count) {
 	ssize_t written;
@@ -192,6 +196,7 @@ static void write_to_parent(int fd, const void *buf, size_t count) {
 	}*/
 }
 
+#ifdef HAVE_WORKING_FORK
 static void resolver_run (int child_out, int child_in) {
 	dns_params_t dns_params;
 	const size_t zero = 0;
@@ -251,7 +256,7 @@ static void resolver_run (int child_out, int child_in) {
 	_exit (0);
 }
 /* Fin de las funciones del proceso hijo */
-
+#endif
 /* Resolución de nombres sin fork */
 void resolv_non_fork (const char *hostname, int puerto, ResolvCallback callback) {
 	struct addrinfo hints, *res;
@@ -277,6 +282,7 @@ void resolv_non_fork (const char *hostname, int puerto, ResolvCallback callback)
 	freeaddrinfo (res);
 }
 
+#ifdef HAVE_WORKING_FORK
 static int send_dns_request_to_child (const char *hostname, int puerto) {
 	pid_t pid;
 	dns_params_t dns_params;
@@ -317,6 +323,7 @@ static int send_dns_request_to_child (const char *hostname, int puerto) {
 	
 	return TRUE;
 }
+#endif
 
 void do_query (const char *hostname, int puerto, ResolvCallback callback) {
 	int res;
@@ -326,6 +333,7 @@ void do_query (const char *hostname, int puerto, ResolvCallback callback) {
 		resolv_non_fork (hostname, puerto, callback);
 		return;
 	}
+#ifdef HAVE_WORKING_FORK
 	res = send_dns_request_to_child (hostname, puerto);
 	
 	if (res == FALSE) {
@@ -351,6 +359,7 @@ void do_query (const char *hostname, int puerto, ResolvCallback callback) {
 		}
 		pos->next = node;
 	}
+#endif
 }
 
 static void free_local_addrinfo (struct addrinfo *list) {
@@ -367,6 +376,7 @@ static void free_local_addrinfo (struct addrinfo *list) {
 }
 
 void pending_query (void) {
+#ifdef HAVE_WORKING_FORK
 	int rc, err;
 	CallbackNode *next;
 	struct sockaddr *addr = NULL;
@@ -431,6 +441,7 @@ void pending_query (void) {
 		free (resolv_list);
 		resolv_list = next;
 	}
+#endif
 }
 
 int analizador_hostname_puerto (const char *cadena, char *hostname, int *puerto, int default_port) {

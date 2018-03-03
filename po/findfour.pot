@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: findfour 0.8.5\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-28 17:50-0600\n"
+"POT-Creation-Date: 2018-03-01 16:45-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -135,7 +135,7 @@ msgstr ""
 msgid "Connecting..."
 msgstr ""
 
-#: src/inputbox.c:430
+#: src/inputbox.c:432
 msgid "(No text)"
 msgstr ""
 
