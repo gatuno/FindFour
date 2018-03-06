@@ -81,7 +81,7 @@ if test "x$MACOSX" = xyes; then
 	AC_MSG_WARN([If they are not, use the --with-frameworks option])
 	AC_MSG_WARN([*******************************************************])
 	
-	SDL_FRAMEWORKS="SDL SDL_image SDL_mixer SDL_ttf CPStamp"
+	SDL_FRAMEWORKS="SDL SDL_image SDL_mixer SDL_ttf"
 	
 	for g in $SDL_FRAMEWORKS; do
 		AC_LIB_APPENDTOVAR([CPPFLAGS], [-I/Library/Frameworks/$g.framework/Headers])
@@ -101,7 +101,7 @@ if test "x$MACOSX" = xyes; then
 		done
 	])
 	
-	AC_LIB_APPENDTOVAR([LIBS], ["-framework AudioToolbox -framework AudioUnit -framework Cocoa -framework CoreAudio -framework IOKit -framework CoreFoundation -framework Carbon -framework CoreServices -framework ApplicationServices -framework Foundation -framework AppKit -framework OpenGL -framework SDL -framework SDL_image -framework SDL_mixer -framework SDL_ttf -framework CPStamp"])
+	AC_LIB_APPENDTOVAR([LIBS], ["-framework AudioToolbox -framework AudioUnit -framework Cocoa -framework CoreAudio -framework IOKit -framework CoreFoundation -framework Carbon -framework CoreServices -framework ApplicationServices -framework Foundation -framework AppKit -framework OpenGL -framework SDL -framework SDL_image -framework SDL_mixer -framework SDL_ttf"])
 else
 	AC_MSG_CHECKING([if you have SDL installed on your system])
 	PKG_CHECK_EXISTS([sdl >= $SDL_VERSION], [AC_MSG_RESULT([yes])], [AC_MSG_FAILURE([SDL not found in your system])])

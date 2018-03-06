@@ -63,19 +63,19 @@ bundle:
 	mkdir -p $(bundle_name)/Contents/Resources/data/sounds
 	cp $(top_builddir)/data/sounds/* $(bundle_name)/Contents/Resources/data/sounds
 	cp $(top_builddir)/data/*.ttf $(bundle_name)/Contents/Resources/data
-#	for cat in $(ALL_LINGUAS); do \
-#	  dir=$(bundle_name)/Contents/Resources/locale/$$cat/LC_MESSAGES; \
-#	  mkdir -p $$dir; \
-#	  echo "installing $$cat as $$dir/findfour.mo"; \
-#	  cp $(top_builddir)/po/$$cat.gmo $$dir/findfour.mo; \
-#	done
+	for cat in $(ALL_LINGUAS); do \
+	  dir=$(bundle_name)/Contents/Resources/locale/$$cat/LC_MESSAGES; \
+	  mkdir -p $$dir; \
+	  echo "installing $$cat as $$dir/findfour.mo"; \
+	  cp $(top_builddir)/po/$$cat.gmo $$dir/findfour.mo; \
+	done
 
 # Special target to copy the binary to FindFour.app/Contents/MacOS.
 .PHONY: bundle-fw
 bundle-fw: bundle
 	cp findfour $(bundle_name)/Contents/MacOS/findfour
 	mkdir  $(bundle_name)/Contents/Frameworks
-	for i in SDL SDL_mixer SDL_image SDL_ttf CPStamp; do \
+	for i in SDL SDL_mixer SDL_image SDL_ttf; do \
 	  cp -a /Library/Frameworks/$${i}.framework $(bundle_name)/Contents/Frameworks/; \
 	done
 	strip $(bundle_name)/Contents/MacOS/findfour
