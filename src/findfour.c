@@ -567,7 +567,7 @@ void setup (void) {
 	SDL_RWseek (ttf_comiccrazy, 0, RW_SEEK_SET);
 	ttf16_comiccrazy = TTF_OpenFontRW (ttf_comiccrazy, 0, 16);
 	
-	SDL_RWseek (ttf_comiccrazy, 1, RW_SEEK_SET);
+	SDL_RWseek (ttf_comiccrazy, 0, RW_SEEK_SET);
 	ttf20_comiccrazy = TTF_OpenFontRW (ttf_comiccrazy, 0, 20);
 	
 	if (!ttf16_comiccrazy || !ttf20_comiccrazy) {
