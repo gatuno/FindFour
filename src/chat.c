@@ -81,7 +81,6 @@ static Chat *static_chat = NULL;
 
 void inicializar_chat (void) {
 	Chat *c;
-	int g;
 	SDL_Color color;
 	
 	c = (Chat *) malloc (sizeof (Chat));
@@ -119,7 +118,6 @@ void inicializar_chat (void) {
 
 int chat_mouse_down (Ventana *v, int x, int y) {
 	int g;
-	Chat *c = (Chat *) window_get_data (v);
 	
 	if (x >= 64 && x < 168 && y < 22) {
 		/* Click por el agarre */
@@ -168,7 +166,6 @@ int chat_mouse_down (Ventana *v, int x, int y) {
 
 int chat_mouse_motion (Ventana *v, int x, int y) {
 	int g;
-	Chat *c = (Chat *) window_get_data (v);
 	
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 30 && y < 58 && x >= 190 && x < 218) {
@@ -586,10 +583,8 @@ void chat_button_event (Ventana *v, int button) {
 }
 
 void chat_full_draw (Chat *c) {
-	SDL_Rect rect, rect2;
-	int g, h;
-	BuddyMCast *buddy;
-	RecentPlay *recent;
+	SDL_Rect rect;
+	int g;
 	SDL_Surface *surface = window_get_surface (c->ventana);
 	
 	SDL_SetAlpha (images[IMG_WINDOW_CHAT], 0, 0);
@@ -793,7 +788,6 @@ void buddy_list_mcast_clean (Uint32 timestamp) {
 
 void buddy_list_recent_add (const char *texto) {
 	RecentPlay *nuevo;
-	char buffer[256];
 	SDL_Color blanco = {255, 255, 255};
 	int g;
 	

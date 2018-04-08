@@ -358,9 +358,6 @@ void juego_button_event (Ventana *v, int button) {
 }
 
 int juego_mouse_down (Ventana *v, int x, int y) {
-	Juego *j;
-	j = (Juego *) window_get_data (v);
-	
 	if (x >= 64 && x < 168 && y < 22) {
 		/* Click por el agarre */
 		window_start_drag (v, x, y);
@@ -460,7 +457,7 @@ void juego_dibujar_resalte (Juego *j) {
 void juego_dibujar_tablero (Juego *j) {
 	Uint32 color;
 	SDL_Surface *surface;
-	SDL_Rect rect, rect2;
+	SDL_Rect rect;
 	int g, h;
 	
 	surface = window_get_surface (j->ventana);

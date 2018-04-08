@@ -78,11 +78,9 @@ typedef struct {
 	uint8_t version;
 	uint8_t type;
 	uint16_t local, remote;
+	char nick[NICK_SIZE];
 	union {
-		struct {
-			char nick[NICK_SIZE];
-			uint8_t initial;
-		};
+		uint8_t initial;
 		struct {
 			uint8_t turno, col, fila;
 		};
@@ -90,9 +88,7 @@ typedef struct {
 			uint8_t turn_ack;
 			uint8_t win;
 		};
-		struct {
-			uint8_t fin;
-		};
+		uint8_t fin;
 	};
 } FFMessageNet;
 
@@ -142,7 +138,6 @@ int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y);
 
 void process_netevent (void);
 
-void conectar_con (Juego *, const char *, const char *, const int);
 void conectar_con_sockaddr (Juego *, const char *, struct sockaddr *, socklen_t);
 void enviar_movimiento (Juego *, int, int, int);
 void enviar_mov_ack (Juego *);

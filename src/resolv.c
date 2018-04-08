@@ -93,7 +93,6 @@ void init_resolver (void) {
 	
 	return;
 #else
-	pid_t child;
 	
 	int proc_in[2], proc_out[2];
 	

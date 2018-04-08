@@ -1,4 +1,4 @@
-AC_INIT([Find Four], [0.9.2], [], [findfour])
+AC_INIT([Find Four], [0.9.3], [], [findfour])
 
 AC_REVISION([Revision 5])
 

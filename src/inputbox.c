@@ -213,13 +213,11 @@ static void full_inputbox_draw (InputBox *ib) {
 static void draw_inputbox_textfield (InputBox *ib) {
 	SDL_Surface *surface;
 	Uint32 color;
-	SDL_Rect rect, rect2, rect3;
-	int p, q, g;
+	SDL_Rect rect, rect2;
+	int p, g;
 	int cursor;
 	
 	surface = window_get_surface (ib->ventana);
-	
-	q = (ib->h - 52) / 8;
 	
 	/* Ahora dibujar el inputbox */
 	p = (ib->w - 68) / 10;
@@ -317,8 +315,6 @@ static void draw_inputbox_textfield (InputBox *ib) {
 			SDL_FillRect (surface, &rect, color);
 		}
 	}
-	
-	q = (ib->h - 52) / 8;
 	
 	/* Ahora dibujar el inputbox */
 	p = (ib->w - 68) / 10;

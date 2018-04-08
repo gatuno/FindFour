@@ -72,10 +72,6 @@
 #include "resolv.h"
 #include "ventana.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #define MULTICAST_IPV4_GROUP "224.0.0.133"
 #define MULTICAST_IPV6_GROUP "FF02::224:0:0:133"
 
@@ -556,28 +552,37 @@ void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *pee
 	conectar_juego (juego, nick);
 }
 
-void conectar_juego (Juego *juego, const char *nick) {
-	char buffer_send[128];
+static void pack_firma_and_type (char *buffer, int tipo) {
+	buffer[0] = buffer[1] = 'F';
+	
+	buffer[1] = 2;
+	
+	buffer[2] = tipo;
+}
+
+static void pack_ports (char *buffer, uint16_t local, uint16_t remoto) {
 	uint16_t temp;
 	
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
+	temp = htons (local);
+	memcpy (&buffer[0], &temp, sizeof (temp));
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	temp = htons (remoto);
+	memcpy (&buffer[2], &temp, sizeof (temp));
+}
+
+static void pack_nick (char *buffer, const char *nick) {
+	strncpy (buffer, nick, sizeof (char) * NICK_SIZE);
+	buffer[NICK_SIZE - 1] = 0;
+}
+
+void conectar_juego (Juego *juego, const char *nick) {
+	char buffer_send[128];
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_SYN;
+	pack_firma_and_type (buffer_send, TYPE_SYN);
 	
-	/* Número local */
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	/* Número remoto */
-	buffer_send[6] = buffer_send[7] = 0;
+	pack_ports (&buffer_send[4], juego->local, 0);
 	
-	/* El nick local */
-	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
-	buffer_send[7 + NICK_SIZE] = '\0';
+	pack_nick (&buffer_send[8], nick);
 	
 	buffer_send[8 + NICK_SIZE] = (juego->inicio == 1 ? 255 : 0);
 	
@@ -590,25 +595,12 @@ void conectar_juego (Juego *juego, const char *nick) {
 
 void enviar_res_syn (Juego *juego, const char *nick) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_RES_SYN);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_RES_SYN;
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
-	
-	/* El nick local */
-	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
-	buffer_send[7 + NICK_SIZE] = '\0';
+	pack_nick (&buffer_send[8], nick);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
@@ -621,24 +613,12 @@ void enviar_res_syn (Juego *juego, const char *nick) {
 
 void enviar_syn_nick (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_SYN_NICK);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_SYN_NICK;
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
-	
-	strncpy (&buffer_send[8], nick_global, sizeof (char) * NICK_SIZE);
-	buffer_send[7 + NICK_SIZE] = '\0';
+	pack_nick (&buffer_send[8], nick_global);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	
@@ -648,21 +628,10 @@ void enviar_syn_nick (Juego *juego) {
 
 void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_TRN);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_TRN;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	buffer_send[8] = turno;
 	buffer_send[9] = col;
@@ -683,21 +652,10 @@ void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 
 void enviar_mov_ack (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_TRN_ACK);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_TRN_ACK;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	buffer_send[8] = juego->turno;
 	
@@ -709,21 +667,10 @@ void enviar_mov_ack (Juego *juego) {
 
 void enviar_mov_ack_finish (Juego *juego, int reason) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_TRN_ACK_GAME);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_TRN_ACK_GAME;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	buffer_send[8] = juego->turno;
 	
@@ -737,21 +684,10 @@ void enviar_mov_ack_finish (Juego *juego, int reason) {
 
 void enviar_fin (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_FIN);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_FIN;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	buffer_send[8] = juego->last_fin;
 	
@@ -764,21 +700,10 @@ void enviar_fin (Juego *juego) {
 
 void enviar_fin_ack (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	pack_firma_and_type (buffer_send, TYPE_FIN_ACK);
 	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_FIN_ACK;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
@@ -789,22 +714,10 @@ void enviar_fin_ack (Juego *juego) {
 
 void enviar_keep_alive (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
 	
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
+	pack_firma_and_type (buffer_send, TYPE_KEEP_ALIVE);
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
-	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_KEEP_ALIVE;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
@@ -814,22 +727,10 @@ void enviar_keep_alive (Juego *juego) {
 
 void enviar_keep_alive_ack (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
 	
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
+	pack_firma_and_type (buffer_send, TYPE_KEEP_ALIVE_ACK);
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
-	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_KEEP_ALIVE_ACK;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
@@ -839,27 +740,26 @@ void enviar_keep_alive_ack (Juego *juego) {
 
 void enviar_syn_nick_ack (Juego *juego) {
 	char buffer_send[128];
-	uint16_t temp;
 	
-	/* Rellenar con la firma del protocolo FF */
-	buffer_send[0] = buffer_send[1] = 'F';
+	pack_firma_and_type (buffer_send, TYPE_SYN_NICK_ACK);
 	
-	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
-	
-	/* El campo de tipo */
-	buffer_send[3] = TYPE_SYN_NICK_ACK;
-	
-	temp = htons (juego->local);
-	memcpy (&buffer_send[4], &temp, sizeof (temp));
-	
-	temp = htons (juego->remote);
-	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	pack_ports (&buffer_send[4], juego->local, juego->remote);
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	//printf ("Respondí con un SYN Nick ACK\n");
+}
+
+static void unpack_nick (const char *buffer, char *nick) {
+	/* Copiar el nick */
+	strncpy (nick, buffer, sizeof (char) * NICK_SIZE);
+	nick[NICK_SIZE - 1] = 0;
+	
+	/* Validar el nick */
+	if (!is_utf8 (nick)) {
+		strncpy (nick, _("No name"), sizeof (char) * NICK_SIZE);
+	}
 }
 
 int unpack (FFMessageNet *msg, char *buffer, size_t len) {
@@ -884,55 +784,37 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	
 	msg->type = buffer[3];
 	
+	if (msg->type == TYPE_MCAST_FIN) return 0; /* Este mensaje no tiene datos extras */
+	
+	if (msg->type == TYPE_MCAST_ANNOUNCE) {
+		if (len < 4 + NICK_SIZE) return -1;
+		
+		unpack_nick (&buffer[4], msg->nick);
+		
+		return 0;
+	}
+	
+	/* Desempaquetar el puerto local y puerto remoto */
+	if (len < 8) return -1;
+	memcpy (&temp, &buffer[4], sizeof (temp));
+	msg->local = ntohs (temp);
+	
+	memcpy (&temp, &buffer[6], sizeof (temp));
+	msg->remote = ntohs (temp);
+	
 	if (msg->type == TYPE_SYN) {
 		if (len < (9 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
 		
-		/* No hay puerto remoto, aún */
-		
-		/* Copiar el nick */
-		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
-		msg->nick[NICK_SIZE - 1] = 0;
+		unpack_nick (&buffer[8], msg->nick);
 		
 		/* Copiar quién empieza */
 		msg->initial = buffer[8 + NICK_SIZE];
-		
-		/* Validar el nick */
-		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
-		}
 	} else if (msg->type == TYPE_RES_SYN) {
 		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
 		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-		
-		/* Copiar el nick */
-		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
-		msg->nick[NICK_SIZE - 1] = 0;
-		
-		/* Copiar quién empieza */
-		//msg->initial = buffer[8 + NICK_SIZE];
-		/* Validar el nick */
-		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
-		}
+		unpack_nick (&buffer[8], msg->nick);
 	} else if (msg->type == TYPE_TRN) {
 		if (len < 11) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
 		
 		msg->turno = buffer[8];
 		msg->col = buffer[9];
@@ -940,112 +822,26 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	} else if (msg->type == TYPE_TRN_ACK) {
 		if (len < 9) return -1;
 		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-		
 		msg->turn_ack = buffer[8];
 	} else if (msg->type == TYPE_TRN_ACK_GAME) {
 		if (len < 10) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
 		
 		msg->turn_ack = buffer[8];
 		msg->win = buffer[9];
 	} else if (msg->type == TYPE_FIN) {
 		if (len < 9) return -1;
 		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-		
 		msg->fin = buffer[8];
-	} else if (msg->type == TYPE_FIN_ACK) {
-		if (len < 8) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-	} else if (msg->type == TYPE_MCAST_ANNOUNCE) {
-		if (len < 4 + NICK_SIZE) return -1;
-		
-		/* Copiar el nick */
-		strncpy (msg->nick, &buffer[4], sizeof (char) * NICK_SIZE);
-		msg->nick[NICK_SIZE - 1] = 0;
-		
-		/* Validar el nick */
-		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
-		}
-	} else if (msg->type == TYPE_MCAST_FIN) {
-		/* Ningún dato extra */
-	} else if (msg->type == TYPE_KEEP_ALIVE) {
-		if (len < 8) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-	} else if (msg->type == TYPE_KEEP_ALIVE_ACK) {
-		if (len < 8) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
 	} else if (msg->type == TYPE_SYN_NICK) {
 		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
 		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-		
-		/* Copiar el nick */
-		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
-		msg->nick[NICK_SIZE - 1] = 0;
-		
-		/* Validar el nick */
-		if (!is_utf8 (msg->nick)) {
-			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
-		}
-	} else if (msg->type == TYPE_SYN_NICK_ACK) {
-		if (len < 8) return -1;
-		
-		/* Copiar el puerto local */
-		memcpy (&temp, &buffer[4], sizeof (temp));
-		msg->local = ntohs (temp);
-		
-		/* Copiar el puerto remoto */
-		memcpy (&temp, &buffer[6], sizeof (temp));
-		msg->remote = ntohs (temp);
-	} else {
+		unpack_nick (&buffer[8], msg->nick);
+	}
+	
+	/* Si el tipo es inválido, retornar error
+	 * Los multicast ya fueron retornados arriba */
+	if ((msg->type > TYPE_SYN_NICK_ACK && msg->type < TYPE_FIN) ||
+	    msg->type > TYPE_FIN_ACK) {
 		return -1;
 	}
 	
@@ -1133,7 +929,7 @@ int do_read (void *buffer, size_t buffer_len, struct sockaddr *src_addr, socklen
 
 void process_netevent (void) {
 	char buffer [256];
-	Juego *juego, *next;
+	Juego *juego;
 	FFMessageNet message;
 	struct sockaddr_storage peer;
 	socklen_t peer_socklen;

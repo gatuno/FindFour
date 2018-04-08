@@ -169,8 +169,7 @@ void draw_background (SDL_Surface *screen, SDL_Rect *update_rect) {
 }
 
 void update_background (SDL_Surface *screen) {
-	int g, h;
-	SDL_Rect rect, rect2;
+	SDL_Rect rect;
 	
 	if (background_current == BACKGROUND_LODGE_NORMAL) {
 		/* La fogata del lodge */

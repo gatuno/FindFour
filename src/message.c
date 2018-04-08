@@ -161,8 +161,7 @@ static void message_full_draw (Message *m) {
 	SDL_Rect rect, rect2, rect3;
 	SDL_Surface *surface;
 	int p, q, g;
-	int ancho, alto;
-	int x, y, imagen;
+	int imagen;
 	Uint32 color;
 	
 	if (m == NULL) return;

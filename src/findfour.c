@@ -238,7 +238,6 @@ void late_connect (const char *hostname, int port, const struct addrinfo *res, i
 void nueva_conexion (InputBox *ib, const char *texto) {
 	int valido, puerto;
 	char *hostname;
-	Ventana *ventana;
 	
 	if (strcmp (texto, "") == 0) {
 		/* Texto vacio, ignorar */
@@ -339,16 +338,8 @@ int main (int argc, char *argv[]) {
 int game_loop (void) {
 	int done = 0;
 	SDL_Event event;
-	SDLKey key;
 	Uint32 last_time, now_time;
-	SDL_Rect rect, rect2;
-	int *map = NULL;
 	
-	int g, h;
-	int start = 0;
-	int x, y;
-	
-	Ventana *ventana, *next;
 	Juego *j;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
@@ -431,7 +422,6 @@ SDL_Surface * set_video_mode (unsigned flags) {
 
 void setup (void) {
 	SDL_Surface * image;
-	TTF_Font *font;
 	SDL_Color blanco, negro;
 	int g;
 	char buffer_file[8192];
