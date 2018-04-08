@@ -266,7 +266,6 @@ Juego *crear_juego (int top_window) {
 	
 	/* Para resincronizar el nick */
 	j->resend_nick = 0;
-	j->wait_nick_ack = 0;
 	
 	/* Vaciar el tablero */
 	memset (j->tablero, 0, sizeof (int[6][7]));

@@ -54,7 +54,8 @@ enum {
 	TYPE_MCAST_FIN,
 	
 	TYPE_FIN = 64,
-	TYPE_FIN_ACK
+	TYPE_FIN_ACK,
+	TYPE_FIN_RESET
 };
 
 #ifndef IN6_IS_ADDR_V4MAPPED
@@ -83,6 +84,7 @@ typedef struct {
 		uint8_t initial;
 		struct {
 			uint8_t turno, col, fila;
+			uint8_t has_nick_update;
 		};
 		struct {
 			uint8_t turn_ack;

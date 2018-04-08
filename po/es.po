@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: findfour 0.8.5\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-03-19 20:00-0600\n"
-"PO-Revision-Date: 2018-02-24 23:31-0600\n"
+"POT-Creation-Date: 2018-04-08 17:04-0500\n"
+"PO-Revision-Date: 2018-04-08 16:10-0600\n"
 "Last-Translator: Félix Arreola Rodríguez <apt@gatuno.mx>\n"
 "Language-Team: Spanish\n"
 "Language: es\n"
@@ -23,7 +23,7 @@ msgstr ""
 msgid "Failed to reserve memory\n"
 msgstr ""
 
-#: src/background.c:104 src/findfour.c:492 src/findfour.c:511
+#: src/background.c:104 src/findfour.c:482 src/findfour.c:501
 #, c-format
 msgid ""
 "Failed to load data file:\n"
@@ -32,11 +32,11 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/chat.c:99
+#: src/chat.c:98
 msgid "Local network"
 msgstr "Red local"
 
-#: src/chat.c:104
+#: src/chat.c:103
 msgid "Recent"
 msgstr "Partidas recientes"
 
@@ -53,25 +53,25 @@ msgstr ""
 "Error al resolver el nombre de equipo '%s':\n"
 "%s"
 
-#: src/findfour.c:289
+#: src/findfour.c:288
 msgid "Hostname or direction to connect:"
 msgstr "Nombre de equipo o dirección a conectar:"
 
-#: src/findfour.c:297 src/findfour.c:368
+#: src/findfour.c:296 src/findfour.c:359
 msgid "Please choose a nickname:"
 msgstr "Por favor elija un nombre de jugador:"
 
-#: src/findfour.c:322
+#: src/findfour.c:321
 #, c-format
 msgid "Player %i"
 msgstr "Jugador %i"
 
-#: src/findfour.c:357
+#: src/findfour.c:348
 #, c-format
 msgid "Failed to init network\n"
 msgstr "Falló al inicializar la red\n"
 
-#: src/findfour.c:442
+#: src/findfour.c:432
 #, c-format
 msgid ""
 "Error: Can't initialize the video subsystem\n"
@@ -79,11 +79,11 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:454
+#: src/findfour.c:444
 msgid "Find Four"
 msgstr "Conecta 4"
 
-#: src/findfour.c:461
+#: src/findfour.c:451
 #, c-format
 msgid ""
 "Error: Can't setup 760x480 video mode.\n"
@@ -91,26 +91,26 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:470
+#: src/findfour.c:460
 #, c-format
 msgid ""
 "Warning: Can't initialize the audio subsystem\n"
 "Continuing...\n"
 msgstr ""
 
-#: src/findfour.c:479
+#: src/findfour.c:469
 #, c-format
 msgid "Warning: Can't initialize the SDL Mixer library\n"
 msgstr ""
 
-#: src/findfour.c:525
+#: src/findfour.c:515
 #, c-format
 msgid ""
 "Error: Can't initialize the SDL TTF library\n"
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:536
+#: src/findfour.c:526
 #, c-format
 msgid ""
 "Failed to load font file 'Burbank Medium Bold'\n"
@@ -118,7 +118,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:547
+#: src/findfour.c:537
 #, c-format
 msgid ""
 "Failed to load font file 'CC Face Front'\n"
@@ -126,7 +126,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:560
+#: src/findfour.c:550
 #, c-format
 msgid ""
 "Failed to load font file 'Comic Crazy'\n"
@@ -134,16 +134,16 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:583
+#: src/findfour.c:573
 msgid "Connecting..."
 msgstr "Conectando..."
 
-#: src/inputbox.c:432
+#: src/inputbox.c:428
 msgid "(No text)"
 msgstr "(Sin texto)"
 
-#: src/juego.c:228 src/juego.c:230 src/netplay.c:1236 src/netplay.c:1238
-#: src/stun.c:229
+#: src/juego.c:228 src/juego.c:230 src/netplay.c:1041 src/netplay.c:1046
+#: src/netplay.c:1048 src/stun.c:229
 msgid "Ok"
 msgstr "Ok"
 
@@ -156,16 +156,25 @@ msgstr "Has ganado"
 msgid "%s and you have tied"
 msgstr "%s y tú han empatado"
 
-#: src/netplay.c:904 src/netplay.c:924 src/netplay.c:996 src/netplay.c:1036
+#: src/netplay.c:758
 msgid "No name"
 msgstr "Sin nombre"
 
-#: src/netplay.c:1236
+#: src/netplay.c:1041
+#, fuzzy
+msgid ""
+"The game has been closed\n"
+"Connection reset"
+msgstr ""
+"El juego ha sido cerrado\n"
+"Err: %i"
+
+#: src/netplay.c:1046
 #, c-format
 msgid "%s has closed the game"
 msgstr "%s ha cerrado el juego"
 
-#: src/netplay.c:1238
+#: src/netplay.c:1048
 #, c-format
 msgid ""
 "The game has been closed\n"
@@ -178,9 +187,9 @@ msgstr ""
 #, c-format
 msgid ""
 "Congratulations!\n"
-"It has been detected that you can play online. You can share your network "
-"address: %s\n"
+"It has been detected that you can play online.\n"
+"You can share your network address: %s\n"
 msgstr ""
 "¡Felicidades!\n"
-"Se ha detectado que puedes jugar en linea. Puedes compartir tu dirección de "
-"red: %s\n"
+"Se ha detectado que puedes jugar en linea.\n"
+"Puedes compartir tu dirección de red: %s\n"

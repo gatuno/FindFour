@@ -396,10 +396,9 @@ int game_loop (void) {
 	/* Recorrer los juegos */
 	j = get_game_list ();
 	while (j != NULL) {
-		if (j->estado != NET_CLOSED && j->estado != NET_WAIT_CLOSING) {
-			j->last_fin = NET_USER_QUIT;
-			j->retry = 0;
-			enviar_fin (j);
+		if (j->estado != NET_CLOSED) {
+			enviar_reset (&j->peer, j->peer_socklen, j->remote);
+			enviar_reset (j);
 		}
 		
 		j = j->next;

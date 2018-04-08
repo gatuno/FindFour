@@ -78,7 +78,6 @@ typedef struct _Juego {
 	
 	/* Para re-sincronizar el nick */
 	int resend_nick;
-	int wait_nick_ack;
 	
 	struct _Juego *next;
 } Juego;

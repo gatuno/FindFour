@@ -585,8 +585,11 @@ void window_manager_event (SDL_Event event) {
 			
 			if (drag != NULL) {
 				window_flip (drag);
+				drag = NULL;
+				
+				break;
 			}
-			drag = NULL;
+			
 			manejado = FALSE;
 			
 			/* Para los botones, antes del mouse motion asumir que nadie está presionado */

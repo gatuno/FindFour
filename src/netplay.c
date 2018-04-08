@@ -555,9 +555,9 @@ void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *pee
 static void pack_firma_and_type (char *buffer, int tipo) {
 	buffer[0] = buffer[1] = 'F';
 	
-	buffer[1] = 2;
+	buffer[2] = 2;
 	
-	buffer[2] = tipo;
+	buffer[3] = tipo;
 }
 
 static void pack_ports (char *buffer, uint16_t local, uint16_t remoto) {
@@ -607,27 +607,12 @@ void enviar_res_syn (Juego *juego, const char *nick) {
 	
 	//printf ("Envie un RES_SYN. Estoy listo para jugar. Mi local prot: %i\n", juego->local);
 	juego->resend_nick = 0;
-	juego->wait_nick_ack = 0;
 	juego->estado = NET_READY;
-}
-
-void enviar_syn_nick (Juego *juego) {
-	char buffer_send[128];
-	
-	pack_firma_and_type (buffer_send, TYPE_SYN_NICK);
-	
-	pack_ports (&buffer_send[4], juego->local, juego->remote);
-	
-	pack_nick (&buffer_send[8], nick_global);
-	
-	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
-	
-	juego->resend_nick = 0;
-	juego->wait_nick_ack = 1;
 }
 
 void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 	char buffer_send[128];
+	int size;
 	
 	pack_firma_and_type (buffer_send, TYPE_TRN);
 	
@@ -636,18 +621,24 @@ void enviar_movimiento (Juego *juego, int turno, int col, int fila) {
 	buffer_send[8] = turno;
 	buffer_send[9] = col;
 	buffer_send[10] = fila;
+	buffer_send[11] = 0;
 	
-	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 11, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	size = 12;
+	
+	if (juego->resend_nick) {
+		size = size + NICK_SIZE;
+		
+		buffer_send[11] = 1;
+		
+		pack_nick (&buffer_send[12], nick_global);
+	}
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, size, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
 	
 	//printf ("Envié un movimiento.\n");
 	
 	juego->estado = NET_WAIT_ACK;
-	
-	/* Si cuando se manda un movimiento, está pendiente un cambio de nick, enviarlo ahora */
-	if (juego->resend_nick || juego->wait_nick_ack) {
-		enviar_syn_nick (juego);
-	}
 }
 
 void enviar_mov_ack (Juego *juego) {
@@ -712,6 +703,16 @@ void enviar_fin_ack (Juego *juego) {
 	juego->estado = NET_CLOSED;
 }
 
+void enviar_reset (struct sockaddr_storage *peer, socklen_t peer_socklen, uint16_t remoto) {
+	char buffer_send[128];
+	
+	pack_firma_and_type (buffer_send, TYPE_FIN_RESET);
+	pack_ports (&buffer_send[4], 0, remoto);
+	
+	int res;
+	res = sendto ((peer->ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)peer, peer_socklen);
+}
+
 void enviar_keep_alive (Juego *juego) {
 	char buffer_send[128];
 	
@@ -734,8 +735,6 @@ void enviar_keep_alive_ack (Juego *juego) {
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	
-	//printf ("Respondí con un Keep Alive ACK\n");
 }
 
 void enviar_syn_nick_ack (Juego *juego) {
@@ -747,8 +746,6 @@ void enviar_syn_nick_ack (Juego *juego) {
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
-	
-	//printf ("Respondí con un SYN Nick ACK\n");
 }
 
 static void unpack_nick (const char *buffer, char *nick) {
@@ -819,6 +816,18 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 		msg->turno = buffer[8];
 		msg->col = buffer[9];
 		msg->fila = buffer[10];
+		
+		msg->has_nick_update = 0;
+		if (len >= 12) {
+			/* El nuevo paquete de movimiento con actualización de nick */
+			msg->has_nick_update = buffer[11];
+			
+			if (msg->has_nick_update) {
+				if (len < (12 + NICK_SIZE)) return -1;
+				
+				unpack_nick (&buffer[12], msg->nick);
+			}
+		}
 	} else if (msg->type == TYPE_TRN_ACK) {
 		if (len < 9) return -1;
 		
@@ -841,7 +850,7 @@ int unpack (FFMessageNet *msg, char *buffer, size_t len) {
 	/* Si el tipo es inválido, retornar error
 	 * Los multicast ya fueron retornados arriba */
 	if ((msg->type > TYPE_SYN_NICK_ACK && msg->type < TYPE_FIN) ||
-	    msg->type > TYPE_FIN_ACK) {
+	    msg->type > TYPE_FIN_RESET) {
 		return -1;
 	}
 	
@@ -1023,11 +1032,16 @@ void process_netevent (void) {
 		}
 		
 		if (juego == NULL) {
-			/* TODO: Ningún juego coincide con el puerto mencionado, enviar un paquete RESET */
+			/* Ningún juego coincide con el puerto mencionado, enviar un paquete RESET */
+			if (message.type != TYPE_FIN_RESET) enviar_reset (&peer, peer_socklen, message.local);
 			continue;
 		}
 		
-		if (message.type == TYPE_FIN) {
+		if (message.type == TYPE_FIN_RESET) {
+			message_add (MSG_ERROR, _("Ok"), _("The game has been closed\nConnection reset"));
+			
+			eliminar_juego (juego);
+		} else if (message.type == TYPE_FIN) {
 			if (message.fin == NET_USER_QUIT && juego->nick_remoto[0] != 0) {
 				message_add (MSG_NORMAL, _("Ok"), _("%s has closed the game"), juego->nick_remoto);
 			} else {
@@ -1045,8 +1059,6 @@ void process_netevent (void) {
 			enviar_syn_nick_ack (juego);
 			
 			recibir_nick (juego, message.nick);
-		} else if (message.type == TYPE_SYN_NICK_ACK) {
-			juego->wait_nick_ack = 0;
 		} else if ((message.type == TYPE_RES_SYN && juego->estado != NET_SYN_SENT) ||
 		    (message.type == TYPE_TRN && (juego->estado != NET_READY && juego->estado != NET_WAIT_ACK)) ||
 		    (message.type == TYPE_TRN_ACK && juego->estado != NET_WAIT_ACK) ||
@@ -1072,11 +1084,15 @@ void process_netevent (void) {
 			}
 			
 			/* Recibir el movimiento */
+			if (message.has_nick_update) {
+				recibir_nick (juego, message.nick);
+			}
 			recibir_movimiento (juego, message.turno, message.col, message.fila);
 		} else if (message.type == TYPE_TRN_ACK) {
 			/* Verificar que el turno confirmado sea el local */
 			
 			if (message.turn_ack == juego->turno) {
+				juego->resend_nick = 0; /* Como ya recibí el ACK del turno que contiene el nick, no es necesario volverlo a enviar */
 				juego->estado = NET_READY;
 			} else {
 				//printf ("FIXME: ???\n");
@@ -1099,14 +1115,9 @@ void process_netevent (void) {
 void enviar_broadcast_game (char *nick) {
 	char buffer[32];
 	
-	buffer[0] = buffer[1] = 'F';
-	buffer[2] = 2; /* Versión del protocolo */
+	pack_firma_and_type (buffer, TYPE_MCAST_ANNOUNCE);
 	
-	buffer[3] = TYPE_MCAST_ANNOUNCE;
-	
-	strncpy (&(buffer[4]), nick, sizeof (char) * NICK_SIZE);
-	
-	buffer[4 + NICK_SIZE - 1] = '\0';
+	pack_nick (&buffer[4], nick);
 	
 	/* Enviar a IPv4 y IPv6 */
 	sendto (fd_socket4, buffer, 4 + NICK_SIZE, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));
@@ -1116,10 +1127,7 @@ void enviar_broadcast_game (char *nick) {
 void enviar_end_broadcast_game (void) {
 	char buffer[4];
 	
-	buffer[0] = buffer[1] = 'F';
-	buffer[2] = 2; /* Versión del protocolo */
-	
-	buffer[3] = TYPE_MCAST_FIN;
+	pack_firma_and_type (buffer, TYPE_MCAST_FIN);
 	
 	/* Enviar a IPv4 y IPv6 */
 	sendto (fd_socket4, buffer, 4, 0, (struct sockaddr *) &mcast_addr, sizeof (mcast_addr));

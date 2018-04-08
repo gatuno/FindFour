@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: findfour 0.9.2\n"
+"Project-Id-Version: findfour 0.9.3\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-03-19 20:00-0600\n"
+"POT-Creation-Date: 2018-04-08 17:04-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -22,7 +22,7 @@ msgstr ""
 msgid "Failed to reserve memory\n"
 msgstr ""
 
-#: src/background.c:104 src/findfour.c:492 src/findfour.c:511
+#: src/background.c:104 src/findfour.c:482 src/findfour.c:501
 #, c-format
 msgid ""
 "Failed to load data file:\n"
@@ -31,11 +31,11 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/chat.c:99
+#: src/chat.c:98
 msgid "Local network"
 msgstr ""
 
-#: src/chat.c:104
+#: src/chat.c:103
 msgid "Recent"
 msgstr ""
 
@@ -50,25 +50,25 @@ msgid ""
 "%s"
 msgstr ""
 
-#: src/findfour.c:289
+#: src/findfour.c:288
 msgid "Hostname or direction to connect:"
 msgstr ""
 
-#: src/findfour.c:297 src/findfour.c:368
+#: src/findfour.c:296 src/findfour.c:359
 msgid "Please choose a nickname:"
 msgstr ""
 
-#: src/findfour.c:322
+#: src/findfour.c:321
 #, c-format
 msgid "Player %i"
 msgstr ""
 
-#: src/findfour.c:357
+#: src/findfour.c:348
 #, c-format
 msgid "Failed to init network\n"
 msgstr ""
 
-#: src/findfour.c:442
+#: src/findfour.c:432
 #, c-format
 msgid ""
 "Error: Can't initialize the video subsystem\n"
@@ -76,11 +76,11 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:454
+#: src/findfour.c:444
 msgid "Find Four"
 msgstr ""
 
-#: src/findfour.c:461
+#: src/findfour.c:451
 #, c-format
 msgid ""
 "Error: Can't setup 760x480 video mode.\n"
@@ -88,26 +88,26 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:470
+#: src/findfour.c:460
 #, c-format
 msgid ""
 "Warning: Can't initialize the audio subsystem\n"
 "Continuing...\n"
 msgstr ""
 
-#: src/findfour.c:479
+#: src/findfour.c:469
 #, c-format
 msgid "Warning: Can't initialize the SDL Mixer library\n"
 msgstr ""
 
-#: src/findfour.c:525
+#: src/findfour.c:515
 #, c-format
 msgid ""
 "Error: Can't initialize the SDL TTF library\n"
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:536
+#: src/findfour.c:526
 #, c-format
 msgid ""
 "Failed to load font file 'Burbank Medium Bold'\n"
@@ -115,7 +115,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:547
+#: src/findfour.c:537
 #, c-format
 msgid ""
 "Failed to load font file 'CC Face Front'\n"
@@ -123,7 +123,7 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:560
+#: src/findfour.c:550
 #, c-format
 msgid ""
 "Failed to load font file 'Comic Crazy'\n"
@@ -131,16 +131,16 @@ msgid ""
 "%s\n"
 msgstr ""
 
-#: src/findfour.c:583
+#: src/findfour.c:573
 msgid "Connecting..."
 msgstr ""
 
-#: src/inputbox.c:432
+#: src/inputbox.c:428
 msgid "(No text)"
 msgstr ""
 
-#: src/juego.c:228 src/juego.c:230 src/netplay.c:1236 src/netplay.c:1238
-#: src/stun.c:229
+#: src/juego.c:228 src/juego.c:230 src/netplay.c:1041 src/netplay.c:1046
+#: src/netplay.c:1048 src/stun.c:229
 msgid "Ok"
 msgstr ""
 
@@ -153,16 +153,22 @@ msgstr ""
 msgid "%s and you have tied"
 msgstr ""
 
-#: src/netplay.c:904 src/netplay.c:924 src/netplay.c:996 src/netplay.c:1036
+#: src/netplay.c:758
 msgid "No name"
 msgstr ""
 
-#: src/netplay.c:1236
+#: src/netplay.c:1041
+msgid ""
+"The game has been closed\n"
+"Connection reset"
+msgstr ""
+
+#: src/netplay.c:1046
 #, c-format
 msgid "%s has closed the game"
 msgstr ""
 
-#: src/netplay.c:1238
+#: src/netplay.c:1048
 #, c-format
 msgid ""
 "The game has been closed\n"
@@ -173,6 +179,6 @@ msgstr ""
 #, c-format
 msgid ""
 "Congratulations!\n"
-"It has been detected that you can play online. You can share your network "
-"address: %s\n"
+"It has been detected that you can play online.\n"
+"You can share your network address: %s\n"
 msgstr ""
